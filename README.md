@@ -11,6 +11,53 @@ run time — the fonts and the QR library are in the repo.
 
 ---
 
+## GET IT ONTO THE PARTY LAPTOP
+
+**Clone it. Don't download the ZIP.** Two things break in a ZIP: it loses the
+executable bit on `start.command`, and macOS quarantines anything downloaded
+through a browser, so double-clicking gets you "cannot be opened because it is
+from an unidentified developer". Cloning avoids both.
+
+First check Node is there:
+
+```bash
+node -v
+```
+
+If that errors, or prints anything below v18:
+
+```bash
+brew install node
+```
+
+(No Homebrew? Get it from https://brew.sh first.) Then:
+
+```bash
+git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
+```
+
+```bash
+cd ~/Developer/apple-music-jukebox && node preflight.js
+```
+
+**Do preflight before anything else.** It is the only thing that has ever
+exercised the AppleScript against a real Music app. It triggers the automation
+permission prompt on your terms rather than mid-party, and it checks your
+library is untouched at the end.
+
+<details>
+<summary>If you really do end up with a ZIP</summary>
+
+```bash
+cd ~/Downloads/apple-music-jukebox-main && chmod +x start.command && xattr -dr com.apple.quarantine .
+```
+
+The `chmod` puts the executable bit back; the `xattr` clears the download
+quarantine. Without both, double-clicking `start.command` does nothing useful.
+</details>
+
+---
+
 ## THE PARTY CHECKLIST
 
 Work down this list. The first four are the ones that actually ruin parties.
@@ -189,6 +236,26 @@ reach them, so nobody can skip your song from the kitchen.
 The hardware media keys on the keyboard still control Music directly, and the
 engine handles that: pausing with the media key sets **hold**, so picks queue
 up but nothing starts until you press play again.
+
+---
+
+## If something goes wrong
+
+| What you see | Almost certainly | Do this |
+|---|---|---|
+| Preflight fails at "control Music" | The automation permission was never granted | System Settings → Privacy & Security → Automation → your Terminal → tick **Music**, then run preflight again |
+| Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output — this is the one layer never tested against real Music |
+| Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the URL on your own phone first |
+| Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
+| Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
+| Music stops dead when the queue runs out | Autoplay (∞) is off | Open Playing Next in Music and light up the **∞** |
+| A pick plays but then silence | The track was unchecked or cloud-unavailable | It should have been excluded. Re-index with ⌃⌥R and tell me |
+| ⌃⌥→ does nothing | Rectangle or Magnet has that shortcut | Quit it for the night, or change `MODIFIER` at the top of `public/app.js` |
+| Laptop goes to sleep mid-party | You started the server by hand, not via `start.command` | `start.command` runs `caffeinate` tied to the server. Use it |
+| Queue looks wrong after a restart | It restores from `data/state.json` | ⌃⌥H → Clear queue, and it rebuilds from scratch |
+
+The host panel (**⌃⌥H**) shows the last error the engine hit. That's the first
+place to look when something is off.
 
 ---
 
