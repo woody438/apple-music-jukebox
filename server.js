@@ -294,7 +294,9 @@ async function handle(req, res) {
     const pid = snap.nowPlaying ? snap.nowPlaying.pid : null;
     let art = null;
     try { art = await ensureArtwork(pid); } catch (e) { art = null; }
-    if (!art) { res.writeHead(404, { 'Cache-Control': 'no-store' }).end(); return; }
+    // 204, not 404: plenty of tracks simply have no artwork and the UI
+    // falls back to a printed label. It is not an error worth logging.
+    if (!art) { res.writeHead(204, { 'Cache-Control': 'no-store' }).end(); return; }
     const buf = fs.readFileSync(art.file);
     res.writeHead(200, {
       'Content-Type': art.contentType,

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#2a0a13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Jukebox</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>&#127925;</text></svg>">
+</head>
+<body>
+
+<div class="cabinet">
+
+  <!-- chrome arch + neon title -->
+  <header class="marquee">
+    <div class="arch">
+      <div class="arch-inner">
+        <h1 class="neon" id="jbTitle">JUKEBOX</h1>
+        <p class="tagline">SELECT YOUR FAVOURITE</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="body-row">
+
+    <div class="tube tube-left" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+
+    <main class="window">
+      <div class="glass">
+
+        <div class="searchbar">
+          <input id="search" type="search" placeholder="Type to search your library..."
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                 enterkeyhint="search" aria-label="Search songs">
+          <button class="clear-btn" id="clearSearch" type="button" aria-label="Clear search" hidden>&times;</button>
+          <span class="count" id="resultCount"></span>
+        </div>
+
+        <div class="page-area" id="pageArea">
+          <div class="flipper" id="flipper">
+            <div class="strip-grid" id="grid"></div>
+          </div>
+          <div class="empty" id="empty" hidden></div>
+        </div>
+
+        <nav class="pager">
+          <button class="chrome-btn" id="prevPage" type="button" aria-label="Previous page">&#9664;</button>
+          <div class="rail" id="rail" role="navigation" aria-label="Jump by artist"></div>
+          <button class="chrome-btn" id="nextPage" type="button" aria-label="Next page">&#9654;</button>
+        </nav>
+
+        <div class="pageno" id="pageNo"></div>
+      </div>
+    </main>
+
+    <div class="tube tube-right" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+
+    <aside class="panel">
+      <section class="now">
+        <div class="vinyl" id="vinyl">
+          <div class="disc">
+            <div class="label" id="discLabel"><span id="discLabelText">JUKEBOX</span></div>
+          </div>
+        </div>
+        <div class="now-text">
+          <div class="now-kicker" id="nowKicker">NOTHING PLAYING</div>
+          <div class="now-title" id="nowTitle">&mdash;</div>
+          <div class="now-artist" id="nowArtist"></div>
+          <div class="progress"><div class="bar" id="progressBar"></div></div>
+          <div class="times"><span id="timeNow">0:00</span><span id="timeTotal">0:00</span></div>
+        </div>
+      </section>
+
+      <section class="upnext">
+        <h2>UP NEXT <span class="pill" id="queueCount">0</span></h2>
+        <ol id="queueList" class="queue"></ol>
+        <p class="queue-empty" id="queueEmpty">Nothing queued &mdash; Autoplay has the room.</p>
+      </section>
+
+      <section class="qr" id="qrSection" hidden>
+        <div class="qr-box" id="qrBox"></div>
+        <div class="qr-text">
+          <strong>PICK FROM YOUR PHONE</strong>
+          <code id="qrUrl"></code>
+          <span class="qr-note">Same Wi-Fi as the laptop</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<!-- phone-only mini bar -->
+<div class="minibar" id="minibar">
+  <button class="minibar-main" id="minibarToggle" type="button">
+    <span class="mini-disc" id="miniDisc"></span>
+    <span class="mini-text">
+      <span class="mini-title" id="miniTitle">Nothing playing</span>
+      <span class="mini-artist" id="miniArtist"></span>
+    </span>
+    <span class="mini-chev" id="miniChev">&#9650;</span>
+  </button>
+  <div class="minibar-progress"><div id="miniBar"></div></div>
+  <div class="minibar-queue" id="minibarQueue" hidden>
+    <h3>UP NEXT</h3>
+    <ol id="miniQueueList"></ol>
+    <p class="queue-empty" id="miniQueueEmpty">Nothing queued yet.</p>
+  </div>
+</div>
+
+<!-- confirm card -->
+<div class="modal" id="confirm" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+    <div class="card-code" id="cfCode">A-1</div>
+    <div class="card-title" id="cfTitle">Song</div>
+    <div class="card-artist" id="cfArtist">Artist</div>
+    <label class="card-who" id="cfWhoWrap">
+      <span>WHO'S PICKING?</span>
+      <input id="cfWho" type="text" maxlength="24" placeholder="optional"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </label>
+    <div class="card-actions">
+      <button class="btn btn-no" id="cfNo" type="button">NAH</button>
+      <button class="btn btn-yes" id="cfYes" type="button">PLAY IT</button>
+    </div>
+  </div>
+</div>
+
+<!-- host panel (laptop only) -->
+<div class="modal host" id="hostPanel" hidden>
+  <div class="host-card" role="dialog" aria-modal="true" aria-label="Host controls">
+    <header>
+      <h2>HOST</h2>
+      <button class="x" id="hostClose" type="button" aria-label="Close">&times;</button>
+    </header>
+
+    <div class="host-row">
+      <button class="hbtn" id="hPlay" type="button">Play / Pause</button>
+      <button class="hbtn" id="hSkip" type="button">Skip</button>
+      <button class="hbtn" id="hHold" type="button">Hold: off</button>
+      <button class="hbtn" id="hReindex" type="button">Re-index</button>
+      <button class="hbtn danger" id="hClear" type="button">Clear queue</button>
+    </div>
+
+    <div class="host-row vol">
+      <button class="hbtn" id="hVolDown" type="button">Vol &minus;10</button>
+      <div class="volbar"><div id="hVolBar"></div></div>
+      <span id="hVolNum">--</span>
+      <button class="hbtn" id="hVolUp" type="button">Vol +10</button>
+    </div>
+
+    <h3>QUEUE</h3>
+    <ol class="host-queue" id="hostQueue"></ol>
+    <p class="queue-empty" id="hostQueueEmpty">Queue is empty.</p>
+
+    <h3>HOTKEYS</h3>
+    <table class="keys">
+      <tr><td>&#8963;&#8997;&rarr;</td><td>Skip (next pick, else next track)</td></tr>
+      <tr><td>&#8963;&#8997;Space</td><td>Play / pause (sets &amp; clears hold)</td></tr>
+      <tr><td>&#8963;&#8997;&uarr; / &darr;</td><td>Volume &plusmn;10</td></tr>
+      <tr><td>&#8963;&#8997;&#9003;</td><td>Remove the last queued pick</td></tr>
+      <tr><td>&#8963;&#8997;H</td><td>This panel</td></tr>
+      <tr><td>&#8963;&#8997;R</td><td>Re-index the library</td></tr>
+      <tr><td>&#8963;&#8997;F</td><td>Full screen</td></tr>
+    </table>
+
+    <h3>STATUS</h3>
+    <div class="host-status" id="hostStatus"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
