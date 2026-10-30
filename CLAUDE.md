@@ -48,6 +48,9 @@ test/mock-suite.js   engine tests, no Mac needed
 test/ui-suite.js     browser tests, optional, needs Playwright
 test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
+demo/                self-contained UI demo: build.js welds the real markup,
+                     stylesheet and fonts to an in-page simulator (demo-app.js)
+                     plus a 338-track demo library. Proves nothing about Music.
 ```
 
 **Reads are JXA, writes are AppleScript.** JXA can return JSON in one round
@@ -192,6 +195,7 @@ node test/ui-suite.js /tmp/shots        # browser tests (needs Playwright)
 node test/party-rehearsal.js           # end-to-end against a running server
 node test/party-rehearsal.js --fast    # same, skipping through the queued picks
 
+node demo/build.js                      # rebuild demo/jukebox-demo.html after a UI change
 node preflight.js                       # against REAL Music, on the Mac
 ./start.command                         # the party
 ```

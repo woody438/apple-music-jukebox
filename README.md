@@ -75,6 +75,25 @@ node preflight.js --no-audio   # skip the playback step
 node preflight.js --yes        # do not ask
 ```
 
+### Try the UI with no Mac at all
+
+`demo/jukebox-demo.html` is the whole interface in one self-contained file —
+the real markup, the real stylesheet, the embedded fonts — with a simulated
+player and a 338-track demo library baked in. Open it straight off disk, or
+scan the QR code on screen to pull it up on your phone.
+
+```bash
+open demo/jukebox-demo.html
+```
+
+A **DEMO** tag in the bottom corner holds a clock-speed control and a
+"jump to end of song" button, so you can watch the handoff and the run into
+Autoplay in seconds rather than minutes.
+
+**It proves nothing about the Music integration** — there is no Music app
+behind it. `preflight.js` is what proves that. Rebuild it after changing the
+UI with `node demo/build.js`.
+
 ### Without a Mac, or without touching your library: mock mode
 
 ```bash
