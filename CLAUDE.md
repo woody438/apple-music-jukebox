@@ -46,6 +46,7 @@ public/              the UI: index.html, style.css, app.js, fonts.css
 preflight.js         checks against the REAL Music app, PASS/FAIL per step
 test/mock-suite.js   engine tests, no Mac needed
 test/ui-suite.js     browser tests, optional, needs Playwright
+test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
 ```
 
@@ -153,6 +154,8 @@ VERBOSE=1 node test/mock-suite.js       # with engine logging
 MOCK=1 node server.js                   # simulator on :8484
 MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js   # with a QR
 node test/ui-suite.js /tmp/shots        # browser tests (needs Playwright)
+node test/party-rehearsal.js           # end-to-end against a running server
+node test/party-rehearsal.js --fast    # same, skipping through the queued picks
 
 node preflight.js                       # against REAL Music, on the Mac
 ./start.command                         # the party

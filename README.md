@@ -88,6 +88,19 @@ is played, nothing is touched. Good for showing someone the UI.
 node test/mock-suite.js        # the engine test suite, no Mac needed
 ```
 
+### The dry run
+
+With the server running in another window — mock or real:
+
+```bash
+node test/party-rehearsal.js
+```
+
+It queues three songs as the laptop and one as a phone, lets the queue run dry
+into Autoplay, picks again, and confirms the pick does not cut the Autoplay
+song off and starts the moment it ends. Add `--fast` against a real library,
+or you will sit through four whole songs.
+
 ---
 
 ## Host controls (laptop only)
