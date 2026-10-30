@@ -37,7 +37,7 @@ server.js            HTTP, SSE, routes, CONFIG block at the top
 lib/engine.js        the queue engine (see below) -- the part that matters
 lib/music.js         osascript bridge, write mutex, reserved-name guard
 lib/mock-music.js    simulated Music, same API, for tests and demos
-lib/library.js       raw columns -> index (filters, sort, selection codes)
+lib/library.js       raw columns -> index (filters, sort, codes, genres)
 lib/util.js          enum normalising, accent folding, sort keys
 lib/state.js         data/state.json, atomic write-then-rename
 scripts/*.js         JXA READS, returning JSON
@@ -117,6 +117,41 @@ const missedHandoff = this.queue[0].addedAt < trackStartedAtMs - 250;
 
 If you change this, run test 3 and test 10 in `test/mock-suite.js`. They fail
 in opposite directions and pin the behaviour between them.
+
+## Browsing a large library
+
+The library is far too big to page through end to end, so there are three
+routes in, and they interact by design:
+
+- **Genre** (`genre` in `public/app.js`, `ALL` / a genre name / `OTHER`).
+  `lib/library.js` groups genres case-insensitively, settles on the commonest
+  spelling, writes that back onto every row, and ships `genres: [{name,
+  count}]` sorted by count. The client gives the top `MAX_GENRE_BUTTONS` (18)
+  their own button and rolls the tail into `OTHER`, which matches rows whose
+  genre is not in the top set.
+- **A-Z rail**, computed from the CURRENT view (`viewLetterStart`), not the
+  whole library — otherwise a genre with no Q artists offers a Q that jumps
+  nowhere.
+- **Search**, in a drawer behind the SEARCH button.
+
+**Genre and search are mutually exclusive, deliberately.** Searching sets
+`genre = ALL`; selecting a genre clears `query` and closes the drawer. The
+alternative — searching within the selected genre — silently hides matches
+from a guest who cannot see why, and at a party nobody debugs that, they just
+conclude the jukebox is broken.
+
+Selection codes stay **global**: a code is computed over the whole library in
+`lib/library.js`, so within a genre they look non-contiguous (B-26, B-35,
+B-84). That is correct — the code identifies a song, not a position in the
+current filter.
+
+### Attract mode
+
+Idle laptop → `kickAttract()` → after `ATTRACT_IDLE_MS` the cabinet flips a
+page every `ATTRACT_STEP_MS`, advancing to the next genre at the end of one.
+Guards: laptop only (never phones — battery), never over an open confirm card
+or search drawer, never while a search is active, and any input kills it.
+Separate from the 90s `IDLE_RESET_MS`, which resets genre and search.
 
 ## Safety rules around the library
 

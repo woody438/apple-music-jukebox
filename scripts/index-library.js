@@ -33,6 +33,7 @@ function run() {
     ['name', function () { return tracks.name(); }],
     ['artist', function () { return tracks.artist(); }],
     ['album', function () { return tracks.album(); }],
+    ['genre', function () { return tracks.genre(); }],
     ['duration', function () { return tracks.duration(); }],
     ['mediaKind', function () { return tracks.mediaKind(); }],
     ['enabled', function () { return tracks.enabled(); }],

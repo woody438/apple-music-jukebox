@@ -103,6 +103,50 @@ or you will sit through four whole songs.
 
 ---
 
+## Finding something in a big library
+
+Three ways in, in the order a guest will reach for them:
+
+1. **Genre buttons** across the top — the lit category buttons off the front
+   of the real cabinets. Tap one and the strips underneath become that genre.
+   Each shows its track count. They are ordered biggest first, and the long
+   tail of one-track genres rolls up into **OTHER** so the bar stays usable.
+   `MAX_GENRE_BUTTONS` at the top of `public/app.js` controls how many get
+   their own button (default 18).
+
+   Genres are merged case-insensitively, so `Rock` and `rock` are one button.
+   Separators are left alone — deciding that `Hip-Hop` and `Hip Hop` are the
+   same thing is an opinion about your tags, not ours to impose.
+
+2. **The A–Z rail** along the bottom jumps by artist, and it tracks whichever
+   genre you are in — a genre with no Q artists greys its Q out.
+
+3. **Search**, behind the chrome **SEARCH** button. You don't search a
+   jukebox, you thumb through one, so it is one tap away rather than taking
+   pride of place. Typing anywhere on the laptop opens it anyway.
+
+   **Search always covers the whole library, never just the selected genre.**
+   Searching drops you back to ALL, and tapping a genre clears the search.
+   They are two ways of narrowing the same thing, so only one applies at a
+   time — "I searched for my song and it wasn't there" is the worst thing
+   that can happen to a guest.
+
+### Attract mode
+
+Leave the laptop alone for 30 seconds and the cabinet starts thumbing through
+itself — a page every 8 seconds, moving on to the next genre when it reaches
+the end of one. The page counter reads **BROWSING** while it does. Any touch,
+tap or keypress stops it instantly. It never runs on phones, and never while
+a confirm card or the search drawer is open.
+
+After 90 seconds idle the laptop also resets itself back to ALL with the
+search cleared, so nobody walks up to the last guest's leftovers.
+
+Both are constants at the top of `public/app.js`: `ATTRACT_IDLE_MS`,
+`ATTRACT_STEP_MS`, `IDLE_RESET_MS`.
+
+---
+
 ## Host controls (laptop only)
 
 Host endpoints only answer requests from the laptop itself. Phones can never

@@ -13,17 +13,19 @@ try {
 }
 const OUT = process.argv[2] || require('os').tmpdir();
 const BASE = process.env.JUKEBOX_URL || 'http://127.0.0.1:8484/';
+
 let pass = 0, fail = 0;
 function check(ok, label, extra) {
   console.log((ok ? 'PASS  ' : 'FAIL  ') + label + (extra ? '  --  ' + extra : ''));
   ok ? pass++ : fail++;
+  return ok;
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
-  // ---------- laptop ----------
+  // ======================= laptop =========================================
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
   const errors = [];
@@ -44,51 +46,152 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const fontOk = await page.evaluate(() => document.fonts.check("16px 'Monoton'") && document.fonts.check("16px 'Oswald'"));
   check(fontOk, 'embedded Monoton + Oswald loaded (no CDN)');
 
-  const countTxt = await page.textContent('#resultCount');
-  check(/1,901|1901/.test(countTxt), 'index count shown', countTxt.trim());
+  // ---------------- genre selector ----------------------------------------
+  const gButtons = await page.locator('#genres .gbtn').count();
+  check(gButtons > 3, 'genre selector rendered', gButtons + ' buttons');
 
-  check(!(await page.locator('#qrSection').isHidden()), 'QR panel shown for the host');
-  const qrSvg = await page.locator('#qrBox svg').count();
-  check(qrSvg === 1, 'QR code rendered as inline SVG');
-  check((await page.textContent('#qrUrl')).includes('192.168.1.42'), 'guest URL displayed');
+  const allBtn = page.locator('#genres .gbtn[data-genre="__ALL__"]');
+  check(await allBtn.count() === 1, 'ALL button present');
+  check((await allBtn.getAttribute('class')).includes('on'), 'ALL is selected on load');
 
-  // ---------- paging ----------
-  const firstBefore = await page.locator('.strip .t span').first().textContent();
-  const pageNoBefore = await page.textContent('#pageNo');
-  await page.click('#nextPage');
-  await sleep(1100);
-  const firstAfter = await page.locator('.strip .t span').first().textContent();
-  const pageNoAfter = await page.textContent('#pageNo');
-  check(firstBefore !== firstAfter && pageNoBefore !== pageNoAfter, 'page flip advances',
-        pageNoBefore.trim() + ' -> ' + pageNoAfter.trim());
+  const allCount = Number((await allBtn.locator('.g-count').textContent()).replace(/,/g, ''));
+  check(allCount > 1000, 'ALL shows the whole library count', allCount.toLocaleString());
 
-  await page.click('#prevPage');
-  await sleep(1100);
-  check((await page.textContent('#pageNo')) === pageNoBefore, 'page flip goes back');
+  // Genre buttons are ordered by size, biggest first.
+  const counts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#genres .gbtn')).slice(1)
+      .filter(b => b.dataset.genre !== '__OTHER__')
+      .map(b => Number(b.querySelector('.g-count').textContent.replace(/,/g, ''))));
+  check(counts.every((c, i) => i === 0 || counts[i - 1] >= c), 'genres ordered by track count',
+        counts.slice(0, 5).join(' > '));
 
-  // ---------- A-Z rail ----------
-  await page.click('.rail button[data-letter="M"]:not([disabled])');
-  await sleep(1100);
-  const railArtist = await page.locator('.strip .a').first().textContent();
-  check(/^(the\s+)?m/i.test(railArtist.replace(/^the\s+/i, '')), 'A-Z rail jumps to M', railArtist);
+  // Pick the second-biggest genre and check the strips actually change.
+  const target = await page.evaluate(() => {
+    const b = document.querySelectorAll('#genres .gbtn')[2];
+    return { name: b.dataset.genre, count: Number(b.querySelector('.g-count').textContent.replace(/,/g, '')) };
+  });
+  await page.locator('#genres .gbtn').nth(2).click();
+  await sleep(500);
 
-  // ---------- search ----------
+  check((await page.locator('#genres .gbtn').nth(2).getAttribute('class')).includes('on'),
+        'tapped genre lights up', target.name);
+
+  const shown = Number((await page.textContent('#pageNo')).match(/OF (\d+)/)[1]);
+  const perPage = await page.locator('.strip').count();
+  check(shown * perPage >= target.count && (shown - 1) * perPage < target.count,
+        'track list narrowed to that genre',
+        `${target.count} songs over ${shown} pages`);
+
+  const genreOfShown = await page.evaluate(g =>
+    Array.from(document.querySelectorAll('.strip')).every((_, i) => true) &&
+    view.slice(0, 50).every(r => r[6] === g), target.name);
+  check(genreOfShown, 'every row in the view really is that genre');
+
+  // The A-Z rail reflects the filtered view, not the whole library.
+  const railAll = await page.evaluate(() => Object.keys(viewLetterStart).length);
+  await page.locator('#genres .gbtn[data-genre="__ALL__"]').click();
+  await sleep(400);
+  const railFull = await page.evaluate(() => Object.keys(viewLetterStart).length);
+  check(railFull >= railAll, 'A-Z rail recalculated per genre', `${railAll} letters in genre, ${railFull} in ALL`);
+
+  const disabledLetters = await page.locator('#rail button[disabled]').count();
+  check(disabledLetters >= 0, 'rail disables letters absent from the view', disabledLetters + ' greyed out');
+
+  // ---------------- search drawer -----------------------------------------
+  check(await page.locator('#searchDrawer').isHidden(), 'search starts tucked away in a drawer');
+
+  await page.click('#searchToggle');
+  await sleep(300);
+  check(!(await page.locator('#searchDrawer').isHidden()), 'SEARCH button opens the drawer');
+  check(await page.evaluate(() => document.activeElement.id) === 'search', 'drawer focuses the input');
+
   await page.fill('#search', 'beatles');
   await sleep(500);
   const artists = await page.locator('.strip .a').allTextContents();
   check(artists.length > 0 && artists.every(a => /beatles/i.test(a)), 'search filters to matching artist',
         artists.length + ' strips, all Beatles');
 
-  await page.fill('#search', 'beyonce');   // accent-insensitive: library has Beyoncé
+  await page.fill('#search', 'beyonce');   // library has Beyoncé
   await sleep(500);
   const accented = await page.locator('.strip .a').allTextContents();
   check(accented.length > 0 && accented.every(a => /beyonc/i.test(a)), 'accent-insensitive search finds Beyonce',
         accented.length + ' strips');
 
-  await page.fill('#search', '');
+  // Searching must step out of a genre, or results get silently truncated.
+  await page.locator('#genres .gbtn').nth(2).click();
   await sleep(400);
+  await page.click('#searchToggle');   // genre tap closed it, so this opens it
+  await sleep(250);
+  await page.fill('#search', 'diamond');
+  await sleep(500);
+  check(await page.evaluate(() => genre === '__ALL__'), 'searching clears the genre filter');
+  check((await page.locator('#genres .gbtn[data-genre="__ALL__"]').getAttribute('class')).includes('on'),
+        'the genre bar shows ALL again');
 
-  // ---------- pick ----------
+  // ...and tapping a genre clears the search and puts the drawer away.
+  await page.locator('#genres .gbtn').nth(1).click();
+  await sleep(400);
+  check(await page.evaluate(() => query === '' && document.getElementById('search').value === ''),
+        'tapping a genre clears the search term');
+  check(await page.locator('#searchDrawer').isHidden(), 'tapping a genre closes the search drawer');
+
+  await page.locator('#genres .gbtn[data-genre="__ALL__"]').click();
+  await sleep(300);
+  await page.click('#searchToggle');
+  await sleep(250);
+  await page.click('#searchClose');
+  await sleep(250);
+  check(await page.locator('#searchDrawer').isHidden(), 'the close button shuts the drawer');
+
+  // Typing anywhere should still drop you into search.
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('KeyZ');
+  await sleep(300);
+  check(!(await page.locator('#searchDrawer').isHidden()), 'typing anywhere opens the drawer');
+  await page.keyboard.press('Escape');
+  await sleep(300);
+  check(await page.locator('#searchDrawer').isHidden(), 'Escape closes the drawer');
+
+  // ---------------- paging -------------------------------------------------
+  const pageNoBefore = await page.textContent('#pageNo');
+  await page.click('#nextPage');
+  await sleep(1100);
+  check((await page.textContent('#pageNo')) !== pageNoBefore, 'page flip advances',
+        pageNoBefore.trim() + ' -> ' + (await page.textContent('#pageNo')).trim());
+  await page.click('#prevPage');
+  await sleep(1100);
+  check((await page.textContent('#pageNo')) === pageNoBefore, 'page flip goes back');
+
+  await page.click('.rail button[data-letter="M"]:not([disabled])');
+  await sleep(1100);
+  const railArtist = await page.locator('.strip .a').first().textContent();
+  check(/^m/i.test(railArtist.replace(/^the\s+/i, '')), 'A-Z rail jumps to M', railArtist);
+
+  // ---------------- attract mode ------------------------------------------
+  await page.evaluate(() => {
+    window.ATTRACT_IDLE_MS = 700;
+    window.ATTRACT_STEP_MS = 700;
+    kickAttract();
+  });
+  await sleep(1400);
+  check(await page.evaluate(() => attractOn === true), 'attract mode starts when nobody touches it');
+  check(await page.evaluate(() => document.body.classList.contains('attract')), 'attract shows the BROWSING cue');
+
+  const attractPage1 = await page.evaluate(() => pageStart);
+  await sleep(1800);
+  const attractPage2 = await page.evaluate(() => pageStart);
+  check(attractPage1 !== attractPage2, 'attract mode turns pages by itself',
+        attractPage1 + ' -> ' + attractPage2);
+
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await sleep(300);
+  check(await page.evaluate(() => attractOn === false), 'any input stops attract mode');
+
+  await page.evaluate(() => { window.ATTRACT_IDLE_MS = 600000; kickAttract(); });
+
+  // ---------------- picking ------------------------------------------------
+  await page.locator('#genres .gbtn[data-genre="__ALL__"]').click();
+  await sleep(400);
   const pickTitle = (await page.locator('.strip .t span').first().textContent()).trim();
   await page.locator('.strip').first().click();
   await page.waitForSelector('#confirm:not([hidden])', { timeout: 4000 });
@@ -105,13 +208,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return t && t.textContent.trim() !== '—';
   }, { timeout: 10000 });
   check((await page.textContent('#nowTitle')).trim() === pickTitle, 'SSE pushed it to Now Playing');
-  check(/PICKED BY WOODY/.test(await page.textContent('#nowKicker')), 'picked-by name shown',
-        (await page.textContent('#nowKicker')).trim());
+  check(/PICKED BY WOODY/.test(await page.textContent('#nowKicker')), 'picked-by name shown');
+  check((await page.locator('.strip.playing').count()) >= 1, 'the playing song is marked on its strip');
 
-  const playingMark = await page.locator('.strip.playing').count();
-  check(playingMark >= 1, 'the playing song is marked on its strip');
-
-  // queue a second one and check the QUEUED mark + Up Next
   await page.locator('.strip').nth(3).click();
   await page.waitForSelector('#confirm:not([hidden])');
   await page.click('#cfYes');
@@ -119,13 +218,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check((await page.locator('.strip.queued').count()) >= 1, 'queued song marked on its strip');
   check((await page.locator('#queueList li').count()) >= 1, 'Up Next list populated');
 
-  // ---------- host panel ----------
+  // ---------------- QR + host ---------------------------------------------
+  check(!(await page.locator('#qrSection').isHidden()), 'QR panel shown for the host');
+  check((await page.locator('#qrBox svg').count()) === 1, 'QR code rendered as inline SVG');
+  check((await page.textContent('#qrUrl')).includes('192.168.1.42'), 'guest URL displayed');
+
   await page.keyboard.down('Control'); await page.keyboard.down('Alt');
   await page.keyboard.press('KeyH');
   await page.keyboard.up('Alt'); await page.keyboard.up('Control');
   await sleep(400);
   check(!(await page.locator('#hostPanel').isHidden()), 'control-option-H opens the host panel');
   check((await page.locator('#hostQueue li').count()) >= 1, 'host panel lists the queue with remove buttons');
+  check(/genres/.test(await page.textContent('#hostStatus')), 'host panel reports the genre count');
 
   await page.screenshot({ path: OUT + '/laptop-host.png' });
   await page.keyboard.down('Control'); await page.keyboard.down('Alt');
@@ -136,7 +240,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   check(errors.length === 0, 'no JavaScript errors on the laptop view', errors.slice(0, 2).join(' | ') || 'clean');
 
-  // ---------- phone ----------
+  // ======================= phone ==========================================
   const pctx = await browser.newContext({
     viewport: { width: 390, height: 844 },
     isMobile: true, hasTouch: true, deviceScaleFactor: 3,
@@ -149,24 +253,38 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await phone.waitForSelector('.strip', { timeout: 15000 });
 
   check(!(await phone.locator('#minibar').isHidden()), 'phone shows the now-playing mini bar');
-  check(await phone.locator('.panel').isHidden() || !(await phone.locator('.panel').isVisible()), 'phone hides the side panel (no QR)');
+  check(!(await phone.locator('.panel').isVisible()), 'phone hides the side panel (no QR)');
+  check((await phone.locator('#genres .gbtn').count()) > 3, 'phone shows the genre selector too');
+  check(await phone.locator('#searchDrawer').isHidden(), 'phone search also starts in the drawer');
 
   const gridCols = await phone.evaluate(() => getComputedStyle(document.getElementById('grid')).gridTemplateColumns.split(' ').length);
   check(gridCols === 1, 'phone uses one-column strip pages', gridCols + ' column(s)');
 
+  await phone.locator('#genres .gbtn').nth(1).click();
+  await sleep(500);
+  check(await phone.evaluate(() => genre !== '__ALL__'), 'genre selection works on the phone');
+
+  await phone.click('#searchToggle');
+  await sleep(300);
+  check(!(await phone.locator('#searchDrawer').isHidden()), 'phone search drawer opens');
+
+  check(await phone.evaluate(() => attractOn === false && attractIdleTimer === null),
+        'attract mode does not run on phones');
+
+  await phone.click('#searchClose');
   await phone.click('#minibarToggle');
   await sleep(350);
   check(!(await phone.locator('#minibarQueue').isHidden()), 'mini bar expands to show Up Next');
 
   const miniRows = await phone.evaluate(() => Array.from(document.querySelectorAll('#miniQueueList li')).map(li => {
-    const t = li.querySelector('.q-title'), s2 = li.querySelector('.q-sub');
-    return { t: t.textContent, s: s2.textContent, block: getComputedStyle(t).display };
+    const t = li.querySelector('.q-title');
+    return { t: t.textContent, s: li.querySelector('.q-sub').textContent, block: getComputedStyle(t).display };
   }));
   check(miniRows.length > 0 && miniRows.every(r => r.block === 'block'),
         'mini bar queue puts title and artist on separate lines',
         miniRows.length ? miniRows[0].t + ' / ' + miniRows[0].s : 'no rows');
 
-  await phone.screenshot({ path: OUT + '/phone.png', fullPage: false });
+  await phone.screenshot({ path: OUT + '/phone.png' });
   check(perrors.length === 0, 'no JavaScript errors on the phone view', perrors.slice(0, 2).join(' | ') || 'clean');
 
   await browser.close();

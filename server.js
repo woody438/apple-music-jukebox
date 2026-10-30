@@ -83,6 +83,7 @@ function cacheIndex(index) {
     version: index.version,
     rowSpec: index.rowSpec,
     letterStart: index.letterStart,
+    genres: index.genres,
     count: index.rows.length,
     rows: index.rows,
   });

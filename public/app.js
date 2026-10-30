@@ -7,12 +7,18 @@
 var MODIFIER = { ctrlKey: true, altKey: true, metaKey: false, shiftKey: false };
 
 var FLIP_MS = 420;
-var IDLE_RESET_MS = 90000;
+var IDLE_RESET_MS = 90000;    // clear search and go back to ALL
+var ATTRACT_IDLE_MS = 30000;  // start thumbing through on its own
+var ATTRACT_STEP_MS = 8000;   // ...a page at a time
+var MAX_GENRE_BUTTONS = 18;   // the rest roll up into OTHER
 var STRIP_MIN_W = 190;
 var STRIP_MIN_H = 62;
 var PHONE_STRIP_H = 72;
 
-var COL = { PID: 0, TITLE: 1, ARTIST: 2, ALBUM: 3, DURATION: 4, CODE: 5 };
+var ALL = '__ALL__';
+var OTHER = '__OTHER__';
+
+var COL = { PID: 0, TITLE: 1, ARTIST: 2, ALBUM: 3, DURATION: 4, CODE: 5, GENRE: 6 };
 
 // ---------------------------------------------------------------------------
 // tiny helpers
@@ -48,22 +54,32 @@ function bandFor(artist) {
   return 'var(--band-' + ((h % 6) + 1) + ')';
 }
 
+// Same rule the server sorts by: ignore a leading article.
+function railLetterOf(artist) {
+  var a = fold(artist).trim().replace(/^(the|a|an)\s+/, '');
+  var c = a.charAt(0);
+  return c >= 'a' && c <= 'z' ? c.toUpperCase() : '#';
+}
+
 // ---------------------------------------------------------------------------
 // state
 // ---------------------------------------------------------------------------
 var cfg = { title: 'JUKEBOX', isHost: false, guestUrl: null, maxPerDevice: 3, mock: false };
 var deviceId = store('jukebox.deviceId') || (function () { var id = makeId(); store('jukebox.deviceId', id); return id; })();
 
-var rows = [];          // the whole library index
-var hay = [];           // folded "title \0 artist \0 album" per row, built lazily
-var hayReady = false;
-var letterStart = {};
-var view = [];          // what is currently being paged through
-var pageStart = 0;      // index of the first strip on screen, not a page number
+var rows = [];              // the whole library index
+var hay = [];               // folded "title \0 artist \0 album", built lazily
+var genres = [];            // [{ name, count }] by count desc
+var topGenreNames = {};     // the ones with their own button
+var genre = ALL;
+var query = '';
+
+var view = [];              // what is currently being paged through
+var viewLetterStart = {};   // A-Z positions WITHIN the current view
+var pageStart = 0;          // index of the first strip on screen
 var pageSize = 16;
 var cols = 4, rows_ = 4;
-var query = '';
-var pending = null;     // the row awaiting confirmation
+var pending = null;         // the row awaiting confirmation
 
 var snap = null;
 var snapAt = 0;
@@ -72,8 +88,10 @@ var nowPid = null;
 var artPid = null;
 var artUrl = null;
 var idleTimer = null;
+var attractIdleTimer = null;
+var attractTimer = null;
+var attractOn = false;
 var flipping = false;
-
 var isPhone = false;
 
 // ---------------------------------------------------------------------------
@@ -81,13 +99,15 @@ var isPhone = false;
 // ---------------------------------------------------------------------------
 function boot() {
   measure();
-  window.addEventListener('resize', function () { measure(); render(); });
-  window.addEventListener('orientationchange', function () { setTimeout(function () { measure(); render(); }, 250); });
+  window.addEventListener('resize', function () { measure(); render(); updateGenreArrows(); });
+  window.addEventListener('orientationchange', function () {
+    setTimeout(function () { measure(); render(); updateGenreArrows(); }, 250);
+  });
 
   fetch('/api/config').then(function (r) { return r.json(); }).then(function (c) {
     cfg = c;
     $('jbTitle').textContent = c.title || 'JUKEBOX';
-    document.title = (c.title || 'Jukebox');
+    document.title = c.title || 'Jukebox';
     if (c.isHost && !isPhone) {
       setupQr(c.guestUrl);
       bindHotkeys();
@@ -132,11 +152,10 @@ function loadIndex() {
     })
     .then(function (ix) {
       rows = ix.rows || [];
-      letterStart = ix.letterStart || {};
-      view = rows;
-      pageStart = 0;
-      buildRail();
-      render();
+      genres = ix.genres || [];
+      if (!genreExists(genre)) genre = ALL;
+      buildGenreBar();
+      applyFilters();
       buildHay();
     })
     .catch(function () {
@@ -159,20 +178,112 @@ function buildHay() {
       hay[i] = fold(r[COL.TITLE]) + '\u0000' + fold(r[COL.ARTIST]) + '\u0000' + fold(r[COL.ALBUM]);
     }
     if (i < rows.length) setTimeout(slice, 0);
-    else { hayReady = true; if (query) runSearch(query); }
+    else if (query) applyFilters();
   }
   slice();
 }
 
-function runSearch(q) {
-  query = q;
-  if (!q.trim()) {
-    view = rows;
-    pageStart = 0;
-    render();
-    return;
+// ---------------------------------------------------------------------------
+// genre + search -> view
+// ---------------------------------------------------------------------------
+function genreExists(name) {
+  if (name === ALL || name === OTHER) return true;
+  for (var i = 0; i < genres.length; i++) if (genres[i].name === name) return true;
+  return false;
+}
+
+function buildGenreBar() {
+  var el = $('genres');
+  el.textContent = '';
+
+  var top = genres.slice(0, MAX_GENRE_BUTTONS);
+  topGenreNames = Object.create(null);
+  top.forEach(function (g) { topGenreNames[g.name] = true; });
+
+  var tailCount = 0;
+  for (var i = MAX_GENRE_BUTTONS; i < genres.length; i++) tailCount += genres[i].count;
+
+  var buttons = [{ key: ALL, label: 'ALL', count: rows.length }];
+  top.forEach(function (g) { buttons.push({ key: g.name, label: g.name, count: g.count }); });
+  // A long tail of one-track genres would make the bar useless, so it rolls
+  // up. Those songs are still reachable through OTHER and through search.
+  if (tailCount) buttons.push({ key: OTHER, label: 'OTHER', count: tailCount });
+
+  buttons.forEach(function (g) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'gbtn';
+    b.dataset.genre = g.key;
+    var n = document.createElement('span');
+    n.className = 'g-name';
+    n.textContent = g.label;
+    var c = document.createElement('span');
+    c.className = 'g-count';
+    c.textContent = g.count.toLocaleString();
+    b.appendChild(n); b.appendChild(c);
+    b.addEventListener('click', function () { selectGenre(g.key); });
+    el.appendChild(b);
+  });
+
+  markGenre();
+  updateGenreArrows();
+}
+
+function markGenre() {
+  var kids = $('genres').children;
+  for (var i = 0; i < kids.length; i++) {
+    kids[i].classList.toggle('on', kids[i].dataset.genre === genre);
   }
+}
+
+function scrollGenreIntoView() {
+  var kids = $('genres').children;
+  for (var i = 0; i < kids.length; i++) {
+    if (kids[i].dataset.genre === genre) {
+      var b = kids[i], wrap = $('genres');
+      var left = b.offsetLeft - (wrap.clientWidth - b.clientWidth) / 2;
+      wrap.scrollLeft = Math.max(0, left);
+      return;
+    }
+  }
+}
+
+function updateGenreArrows() {
+  var wrap = $('genres');
+  var overflow = wrap.scrollWidth > wrap.clientWidth + 4;
+  $('genreLeft').hidden = !overflow || isPhone;
+  $('genreRight').hidden = !overflow || isPhone;
+}
+
+function selectGenre(name) {
+  genre = name;
+  // Genre and search are two ways of narrowing the same thing, and they are
+  // mutually exclusive here. Tapping a genre means "I'm browsing now", so
+  // the search term goes and the drawer gets out of the way with it.
+  if (query) {
+    query = '';
+    $('search').value = '';
+    $('clearSearch').hidden = true;
+  }
+  closeSearch(false);
+  markGenre();
+  scrollGenreIntoView();
+  applyFilters();
+}
+
+function genreFilter(list) {
+  if (genre === ALL) return list;
+  if (genre === OTHER) return list.filter(function (r) { return !topGenreNames[r[COL.GENRE]]; });
+  return list.filter(function (r) { return r[COL.GENRE] === genre; });
+}
+
+// Search always runs over the WHOLE library, never within the selected
+// genre. "I searched for my song and it wasn't there" is the worst thing
+// that can happen to a guest at a party.
+function searchRows(q) {
   var toks = fold(q).split(/\s+/).filter(Boolean);
+  if (!toks.length) return rows;
+
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     var h = hay[i];
@@ -195,9 +306,32 @@ function runSearch(q) {
     if (ok) out.push([score, i]);
   }
   out.sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; });
-  view = out.map(function (x) { return rows[x[1]]; });
+  return out.map(function (x) { return rows[x[1]]; });
+}
+
+function computeLetters(list) {
+  var m = Object.create(null);
+  for (var i = 0; i < list.length; i++) {
+    var L = railLetterOf(list[i][COL.ARTIST]);
+    if (!(L in m)) m[L] = i;
+  }
+  return m;
+}
+
+function applyFilters() {
+  view = query.trim() ? searchRows(query) : genreFilter(rows);
+  viewLetterStart = computeLetters(view);
   pageStart = 0;
+  buildRail();
   render();
+}
+
+function runSearch(q) {
+  query = q;
+  // Searching steps out of whatever genre was selected, so results are never
+  // silently cut down to a category the guest cannot see.
+  if (q.trim() && genre !== ALL) { genre = ALL; markGenre(); scrollGenreIntoView(); }
+  applyFilters();
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +348,11 @@ function render() {
 
   var none = view.length === 0;
   $('empty').hidden = !none;
-  if (none) $('empty').textContent = query ? 'No songs match "' + query + '"' : 'Nothing in the index yet.';
+  if (none) {
+    $('empty').textContent = query
+      ? 'No songs match "' + query + '"'
+      : (genre === ALL ? 'Nothing in the index yet.' : 'Nothing in this genre.');
+  }
 
   var totalPages = Math.max(1, Math.ceil(view.length / pageSize));
   var pageNum = Math.min(totalPages, Math.floor(pageStart / pageSize) + 1);
@@ -255,21 +393,21 @@ function stripFor(row) {
 function buildRail() {
   var rail = $('rail');
   rail.textContent = '';
-  var letters = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-  letters.forEach(function (L) {
+  '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (L) {
     var b = document.createElement('button');
     b.type = 'button';
     b.textContent = L;
     b.dataset.letter = L;
-    if (!(L in letterStart)) b.disabled = true;
+    // Disabled letters reflect the CURRENT view, so a genre with no Q
+    // artists greys its Q out rather than jumping nowhere.
+    if (!(L in viewLetterStart)) b.disabled = true;
     b.addEventListener('click', function () { jumpToLetter(L); });
     rail.appendChild(b);
   });
 }
 
 function jumpToLetter(L) {
-  if (query) { $('search').value = ''; $('clearSearch').hidden = true; runSearch(''); }
-  var at = letterStart[L];
+  var at = viewLetterStart[L];
   if (at === undefined) return;
   // Anchor the page ON the letter. Rounding to a page boundary instead would
   // put the tail of the previous artist at the top, which just looks broken.
@@ -277,17 +415,17 @@ function jumpToLetter(L) {
 }
 
 function markRail() {
-  if (query || !view.length) {
-    Array.prototype.forEach.call($('rail').children, function (b) { b.classList.remove('on'); });
-    return;
-  }
+  var kids = $('rail').children;
   var current = null;
-  for (var L in letterStart) {
-    if (letterStart[L] <= pageStart && (current === null || letterStart[L] > letterStart[current])) current = L;
+  if (view.length) {
+    for (var L in viewLetterStart) {
+      if (viewLetterStart[L] <= pageStart &&
+          (current === null || viewLetterStart[L] > viewLetterStart[current])) current = L;
+    }
   }
-  Array.prototype.forEach.call($('rail').children, function (b) {
-    b.classList.toggle('on', b.dataset.letter === current);
-  });
+  for (var i = 0; i < kids.length; i++) {
+    kids[i].classList.toggle('on', kids[i].dataset.letter === current);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +460,84 @@ function nextPage() { flipToStart(pageStart + pageSize, 1); }
 function prevPage() { flipToStart(Math.max(0, pageStart - pageSize), -1); }
 
 // ---------------------------------------------------------------------------
+// attract mode -- the cabinet thumbing through itself
+// ---------------------------------------------------------------------------
+function attractStop() {
+  if (attractTimer) { clearTimeout(attractTimer); attractTimer = null; }
+  if (attractOn) { attractOn = false; document.body.classList.remove('attract'); render(); }
+}
+
+function kickAttract() {
+  attractStop();
+  if (attractIdleTimer) clearTimeout(attractIdleTimer);
+  // Laptop only: a phone doing this in somebody's pocket is just battery.
+  if (!cfg.isHost || isPhone) return;
+  attractIdleTimer = setTimeout(function () {
+    attractOn = true;
+    document.body.classList.add('attract');
+    render();
+    attractStep();
+  }, ATTRACT_IDLE_MS);
+}
+
+function attractStep() {
+  attractTimer = setTimeout(function () {
+    if (!attractOn) return;
+    // Never flip the page out from under an open dialog.
+    if ($('confirm').hidden && $('searchDrawer').hidden && !query) {
+      var total = Math.max(1, Math.ceil(view.length / pageSize));
+      var current = Math.floor(pageStart / pageSize);
+      if (current + 1 < total) {
+        flipToStart(pageStart + pageSize, 1);
+      } else {
+        // End of the genre: show off a different corner of the library.
+        attractNextGenre();
+      }
+    }
+    attractStep();
+  }, ATTRACT_STEP_MS);
+}
+
+function attractNextGenre() {
+  var kids = $('genres').children;
+  if (kids.length < 2) { flipToStart(0, -1); return; }
+  var at = 0;
+  for (var i = 0; i < kids.length; i++) if (kids[i].dataset.genre === genre) { at = i; break; }
+  var next = kids[(at + 1) % kids.length];
+  genre = next.dataset.genre;
+  markGenre();
+  scrollGenreIntoView();
+  applyFilters();
+}
+
+// ---------------------------------------------------------------------------
+// search drawer
+// ---------------------------------------------------------------------------
+function openSearch(focus) {
+  $('searchDrawer').hidden = false;
+  $('searchToggle').classList.add('on');
+  $('searchToggle').setAttribute('aria-expanded', 'true');
+  attractStop();
+  if (focus !== false) $('search').focus();
+}
+
+function closeSearch(clear) {
+  $('searchDrawer').hidden = true;
+  $('searchToggle').classList.remove('on');
+  $('searchToggle').setAttribute('aria-expanded', 'false');
+  if (clear && query) {
+    $('search').value = '';
+    $('clearSearch').hidden = true;
+    runSearch('');
+  }
+}
+
+function toggleSearch() {
+  if ($('searchDrawer').hidden) openSearch();
+  else closeSearch(true);
+}
+
+// ---------------------------------------------------------------------------
 // picking
 // ---------------------------------------------------------------------------
 function openConfirm(row) {
@@ -334,6 +550,7 @@ function openConfirm(row) {
   $('cfWho').value = cfg.isHost ? '' : (store('jukebox.name') || '');
   $('confirm').hidden = false;
   kickIdle();
+  kickAttract();
 }
 
 function closeConfirm() { $('confirm').hidden = true; pending = null; }
@@ -389,7 +606,7 @@ function connectSse() {
   es.onerror = function () {
     // EventSource reconnects by itself, but if it gives up entirely we
     // rebuild it rather than leaving the room looking at a frozen screen.
-    if (es.readyState === 2) { setTimeout(connectSse, 2000); }
+    if (es.readyState === 2) setTimeout(connectSse, 2000);
   };
 }
 
@@ -599,7 +816,7 @@ function bindHotkeys() {
       default:
         handled = false;
     }
-    if (handled) { e.preventDefault(); kickIdle(); }
+    if (handled) { e.preventDefault(); kickIdle(); kickAttract(); }
   });
 }
 
@@ -646,7 +863,10 @@ function paintHost() {
   var bits = [];
   if (snap) {
     bits.push('Music: ' + (snap.player.running ? snap.player.state : 'NOT RUNNING'));
-    bits.push('Index: ' + (snap.indexCount || 0).toLocaleString() + ' songs' + (snap.indexing ? ' (re-indexing...)' : ''));
+    bits.push('Index: ' + (snap.indexCount || 0).toLocaleString() + ' songs in ' + genres.length + ' genres' +
+              (snap.indexing ? ' (re-indexing...)' : ''));
+    bits.push('Showing: ' + (genre === ALL ? 'all genres' : genre === OTHER ? 'other genres' : genre) +
+              ' — ' + view.length.toLocaleString() + ' songs');
     bits.push('Device: ' + deviceId);
     if (cfg.guestUrl) bits.push('Guests: ' + cfg.guestUrl);
     if (cfg.mock) bits.push('MOCK MODE — no real audio');
@@ -666,9 +886,14 @@ function kickIdle() {
   if (!cfg.isHost || isPhone) return;
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(function () {
+    closeSearch(false);
     $('search').value = '';
     $('clearSearch').hidden = true;
-    runSearch('');
+    query = '';
+    genre = ALL;
+    markGenre();
+    scrollGenreIntoView();
+    applyFilters();
     closeConfirm();
     $('hostPanel').hidden = true;
   }, IDLE_RESET_MS);
@@ -676,9 +901,10 @@ function kickIdle() {
 
 function startIdleWatch() {
   ['keydown', 'pointerdown', 'touchstart', 'wheel'].forEach(function (ev) {
-    document.addEventListener(ev, kickIdle, { passive: true });
+    document.addEventListener(ev, function () { kickIdle(); kickAttract(); }, { passive: true });
   });
   kickIdle();
+  kickAttract();
 }
 
 // ---------------------------------------------------------------------------
@@ -695,6 +921,11 @@ function bindUi() {
   $('clearSearch').addEventListener('click', function () {
     search.value = ''; $('clearSearch').hidden = true; runSearch(''); search.focus();
   });
+  $('searchToggle').addEventListener('click', toggleSearch);
+  $('searchClose').addEventListener('click', function () { closeSearch(true); });
+
+  $('genreLeft').addEventListener('click', function () { $('genres').scrollLeft -= 240; });
+  $('genreRight').addEventListener('click', function () { $('genres').scrollLeft += 240; });
 
   $('prevPage').addEventListener('click', prevPage);
   $('nextPage').addEventListener('click', nextPage);
@@ -722,7 +953,7 @@ function bindUi() {
     $('minibar').classList.toggle('open', open);
   });
 
-  // Arrow keys turn pages; typing anywhere drops you into the search box.
+  // Arrow keys turn pages; typing anywhere opens the drawer and searches.
   document.addEventListener('keydown', function (e) {
     if (matchesModifier(e)) return;
     var inField = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
@@ -730,7 +961,7 @@ function bindUi() {
     if (e.key === 'Escape') {
       if (!$('confirm').hidden) { closeConfirm(); return; }
       if (!$('hostPanel').hidden) { $('hostPanel').hidden = true; return; }
-      if (search.value) { search.value = ''; $('clearSearch').hidden = true; runSearch(''); search.blur(); }
+      if (!$('searchDrawer').hidden) { closeSearch(true); search.blur(); return; }
       return;
     }
     if (!$('confirm').hidden) {
@@ -741,8 +972,7 @@ function bindUi() {
     if (e.key === 'ArrowLeft' && !inField) { e.preventDefault(); prevPage(); return; }
 
     if (!inField && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      search.focus();
-      // let the character land in the field itself
+      openSearch();   // let the character itself land in the field
     }
   });
 

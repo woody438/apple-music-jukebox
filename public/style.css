@@ -186,14 +186,93 @@ input { font-family: inherit; }
   backdrop-filter: blur(1px);
 }
 
-/* ---------- search ------------------------------------------------------ */
-.searchbar { position: relative; display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+/* ---------- genre selector ---------------------------------------------- */
+.selector { flex: 0 0 auto; display: flex; align-items: stretch; gap: 7px; min-width: 0; }
 
-.searchbar input {
-  flex: 1; min-width: 0;
-  padding: clamp(7px, 1.1vh, 12px) 38px clamp(7px, 1.1vh, 12px) 14px;
+.genres {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; gap: 6px;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.genres::-webkit-scrollbar { display: none; }
+
+/* The lit plastic category buttons off the front of the real cabinets. */
+.gbtn {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px;
+  padding: clamp(5px, .85vh, 9px) clamp(10px, 1.1vw, 16px);
+  border-radius: 7px;
+  color: #ffe9c9;
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(0,0,0,.42) 55%, rgba(0,0,0,.6));
+  border: 1px solid rgba(255,255,255,.17);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 2px 5px rgba(0,0,0,.45);
+  transition: transform .08s ease;
+  white-space: nowrap;
+}
+.gbtn .g-name {
+  font-size: clamp(10px, 1.42vh, 14px); font-weight: 600; letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.gbtn .g-count {
+  font-size: clamp(7px, .98vh, 10px); letter-spacing: .08em; color: rgba(255,255,255,.45);
+}
+.gbtn:active { transform: translateY(1px); }
+.gbtn.on {
+  color: #fff;
+  background: linear-gradient(180deg, #ff6aa8, var(--neon-pink) 48%, #c01d5c 100%);
+  border-color: #ff9ac4;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 0 16px rgba(255,61,139,.6);
+}
+.gbtn.on .g-count { color: rgba(255,255,255,.8); }
+
+.scroll-arrow {
+  flex: 0 0 auto; width: 26px;
+  font-size: 11px; color: #2b3038;
+  background: linear-gradient(180deg, var(--chrome-1), var(--chrome-2) 48%, var(--chrome-3) 52%, var(--chrome-4));
+  border: 1px solid #6b7480; border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
+}
+
+.search-toggle {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 clamp(10px, 1.1vw, 15px);
+  font-size: clamp(9px, 1.26vh, 12px); font-weight: 600; letter-spacing: .14em;
+  color: #2b3038;
+  background: linear-gradient(180deg, var(--chrome-1), var(--chrome-2) 48%, var(--chrome-3) 52%, var(--chrome-4));
+  border: 1px solid #6b7480; border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
+}
+.search-toggle svg {
+  width: 15px; height: 15px; flex: 0 0 auto;
+  fill: none; stroke: #2b3038; stroke-width: 2.4; stroke-linecap: round;
+}
+.search-toggle.on { background: linear-gradient(180deg, #ff6aa8, var(--neon-pink)); color: #fff; border-color: #ff9ac4; }
+.search-toggle.on svg { stroke: #fff; }
+
+/* ---------- search drawer ------------------------------------------------ */
+.search-drawer {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 9px;
+  padding: clamp(6px, .9vh, 10px) clamp(8px, .9vw, 12px);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.34));
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 2px 10px rgba(0,0,0,.55);
+  animation: drawer-open .18s ease;
+}
+@keyframes drawer-open {
+  from { opacity: 0; transform: translateY(-8px); }
+}
+
+.search-drawer input {
+  flex: 1 1 auto; min-width: 0;
+  padding: clamp(6px, 1vh, 11px) 14px;
   font-size: clamp(14px, 1.9vh, 19px);
-  font-weight: 400;
   letter-spacing: .04em;
   color: var(--ink);
   background: linear-gradient(180deg, #fffdf6, var(--card));
@@ -203,18 +282,24 @@ input { font-family: inherit; }
   outline: none;
   -webkit-appearance: none;
 }
-.searchbar input:focus { border-color: var(--neon-cyan); box-shadow: inset 0 2px 5px rgba(0,0,0,.22), 0 0 0 3px rgba(67,232,255,.3); }
-.searchbar input::-webkit-search-cancel-button { display: none; }
+.search-drawer input:focus { border-color: var(--neon-cyan); box-shadow: inset 0 2px 5px rgba(0,0,0,.22), 0 0 0 3px rgba(67,232,255,.3); }
+.search-drawer input::-webkit-search-cancel-button { display: none; }
 
 .clear-btn {
-  position: absolute; right: 86px;
+  flex: 0 0 auto;
   width: 26px; height: 26px; line-height: 1;
-  font-size: 19px; color: #7a6a52;
-  background: rgba(0,0,0,.07); border: none; border-radius: 50%;
+  font-size: 19px; color: #ffe9c9;
+  background: rgba(255,255,255,.12); border: none; border-radius: 50%;
 }
 .count {
-  flex: 0 0 auto; min-width: 70px; text-align: right;
+  flex: 0 0 auto; min-width: 74px; text-align: right;
   font-size: clamp(9px, 1.3vh, 12px); letter-spacing: .12em; color: rgba(255,255,255,.62);
+}
+.drawer-close {
+  flex: 0 0 auto;
+  width: 30px; height: 30px; line-height: 1;
+  font-size: 21px; color: #fff;
+  background: rgba(255,255,255,.12); border: none; border-radius: 50%;
 }
 
 /* ---------- strips ------------------------------------------------------ */
@@ -346,6 +431,13 @@ input { font-family: inherit; }
   font-size: clamp(9px, 1.3vh, 12px); letter-spacing: .2em;
   color: rgba(255,255,255,.52);
 }
+/* Attract mode: the cabinet thumbing through itself when nobody is there. */
+body.attract .pageno::after {
+  content: '  \00b7  BROWSING';
+  color: var(--neon-cyan);
+  animation: attract-pulse 2.4s ease-in-out infinite;
+}
+@keyframes attract-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
 /* ---------- side panel -------------------------------------------------- */
 .panel {
@@ -605,11 +697,15 @@ input { font-family: inherit; }
     min-height: calc(100dvh - 190px);
     padding: 9px;
   }
-  .searchbar { position: sticky; top: 0; z-index: 5; }
-  .clear-btn { right: 10px; }
+  .selector { position: sticky; top: 0; z-index: 5; }
+  .gbtn { padding: 7px 12px; }
+  .search-toggle span { display: none; }
+  .search-toggle { padding: 0 12px; }
+  .scroll-arrow { display: none; }
   .count { display: none; }
 
   .page-area { min-height: calc(100dvh - 300px); }
+  .search-drawer { position: sticky; top: 46px; z-index: 5; }
   .strip-grid { grid-template-columns: 1fr; }
   .strip .t { font-size: 15px; padding: 7px 46px 7px 11px; }
   .strip .a { font-size: 12px; padding: 4px 11px 5px; }
