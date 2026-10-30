@@ -1,0 +1,15 @@
+{
+  "name": "apple-music-jukebox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Party jukebox web UI that drives the macOS Music app via AppleScript/JXA.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "mock": "MOCK=1 node server.js",
+    "test": "node test/mock-suite.js",
+    "preflight": "node preflight.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

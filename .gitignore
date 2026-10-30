@@ -1,0 +1,8 @@
+# Runtime state: the queue, rebuilt on every party.
+data/*
+!data/.gitkeep
+# Cached artwork written by the AppleScript artwork bridge.
+public/artwork-cache/
+.DS_Store
+node_modules/
+*.log
