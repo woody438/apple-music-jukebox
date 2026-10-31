@@ -53,6 +53,25 @@ demo/                self-contained UI demo: build.js welds the real markup,
                      plus a 338-track demo library. Proves nothing about Music.
 ```
 
+### What a real Music app actually does
+
+Measured during preflight on a 13,375-track library, worth knowing before
+changing anything:
+
+- **`play` does not make the playlist the playback context.** Playing a track
+  inside the "Jukebox Preflight" playlist left `current playlist` reporting
+  **"Music"**, not the playlist. So Music will not reliably walk the playlist
+  on its own after a pick ends. The forced handoff is not belt-and-braces, it
+  is the mechanism. Nothing in `lib/engine.js` branches on `currentPlaylist`
+  for exactly this reason — every decision is made on the track's persistent
+  ID. Keep it that way.
+- Indexing 13,375 tracks takes about **1 second**.
+- Artist names really do start with `&` and `'` (`&ME, Black Coffee,
+  Keinemusik`; `'Little' Louie Vega & Mark Anthony`). They bucket under `#`
+  on the A-Z rail, which is correct. Nothing is ever addressed by name — only
+  by persistent ID — so punctuation in titles and artists cannot break a
+  script argument.
+
 **Reads are JXA, writes are AppleScript.** JXA can return JSON in one round
 trip; AppleScript has the saner syntax for mutation. The library index is a
 **bulk property fetch** — `tracks.name()`, `tracks.artist()` and so on, one
@@ -175,12 +194,12 @@ These are not negotiable. It is somebody's real music library.
 
 | Risk | Where it bites | Mitigation |
 |---|---|---|
-| **The AppleScript/JXA layer was written without a Mac to test on.** Everything else is covered by tests; this layer is not. | Any script in `scripts/` could have a property name wrong for your macOS version. | **Run `node preflight.js` first.** It exercises every script and reports per step. This is the single most important thing to do before the party. |
-| Bulk index on a very large library | Slow, or one bad track fails a whole column | Each column is fetched independently; a failure is recorded in `partial` rather than aborting. Only `pid` is mandatory. |
+| ~~The AppleScript/JXA layer was never executed~~ **CLEARED** | — | Preflight passed 17/17 against real Music on macOS 25.6 (darwin), Node 26.8, over a 13,375-track library. Every script in `scripts/` works. Re-run `node preflight.js` after any change to them. |
+| Bulk index on a very large library | Slow, or one bad track fails a whole column | Measured: **13,375 tracks indexed in 1.0s**, so this is not the problem it looked like. Each column is still fetched independently; a failure is recorded in `partial` rather than aborting. Only `pid` is mandatory. |
 | Crossfade left on | Two songs overlap at handoff | README checklist item 1 |
 | Rectangle/Magnet own ⌃⌥←/→ | Skip hotkey does nothing | `preflight.js` checks; change `MODIFIER` in `public/app.js` |
 | Guest Wi-Fi client isolation | Phones load nothing | README checklist item 4 |
-| Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag. ~26 KB per 2,000 tracks. |
+| Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
 | `position` jitter from Music | Handoff fires slightly early or late | 250 ms margin in the missed-handoff test; handoff clips <1 s by design |
 
 ## How to run things

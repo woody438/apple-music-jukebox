@@ -244,7 +244,7 @@ up but nothing starts until you press play again.
 | What you see | Almost certainly | Do this |
 |---|---|---|
 | Preflight fails at "control Music" | The automation permission was never granted | System Settings → Privacy & Security → Automation → your Terminal → tick **Music**, then run preflight again |
-| Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output — this is the one layer never tested against real Music |
+| Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output. (Passed 17/17 on macOS 25.6 / Node 26.8 over a 13,375-track library.) |
 | Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the URL on your own phone first |
 | Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
 | Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
