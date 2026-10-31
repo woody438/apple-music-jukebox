@@ -114,6 +114,12 @@ function boot() {
       setupQr(c.guestUrl);
       bindHotkeys();
       startIdleWatch();
+    } else if (!isPhone) {
+      // A big screen that is NOT the host: almost always the laptop opened by
+      // its own LAN address rather than localhost. The gear vanishes and the
+      // host hotkeys do nothing, which looks like a broken build rather than
+      // a deliberate rule. Say so instead of failing silently.
+      bindHostHint();
     }
   }).catch(function () {});
 
@@ -903,6 +909,16 @@ function bindHotkeys() {
         handled = false;
     }
     if (handled) { e.preventDefault(); kickIdle(); kickAttract(); }
+  });
+}
+
+// Host keys on a non-host screen explain themselves rather than doing nothing.
+function bindHostHint() {
+  document.addEventListener('keydown', function (e) {
+    if (!matchesModifier(e)) return;
+    if (['KeyH', 'KeyG', 'KeyR', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Backspace'].indexOf(e.code) === -1) return;
+    e.preventDefault();
+    toast('Host controls only work at http://localhost:' + (location.port || '8484') + '/ \u2014 this window is a guest.', 'bad');
   });
 }
 

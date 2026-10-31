@@ -412,8 +412,8 @@ Set at the top of `server.js`:
 
 | Rule | Default | Change it with |
 |---|---|---|
-| Queued picks per phone | 3 | `JUKEBOX_MAX_PER_PHONE` |
-| Queued picks for the laptop | 10 | `JUKEBOX_MAX_PER_LAPTOP` |
+| Queued picks per phone | 25 | `JUKEBOX_MAX_PER_PHONE` |
+| Queued picks for the laptop | 25 | `JUKEBOX_MAX_PER_LAPTOP` |
 | Maximum queue length | 60 | `JUKEBOX_MAX_QUEUE` |
 | No repeat within | 60 minutes (the laptop is exempt) | `JUKEBOX_REPEAT_MINUTES`, `0` turns it off |
 | No duplicate of the playing or a queued song | always | — |
@@ -424,11 +424,14 @@ The startup log prints the rules in force.
 **The cap is on songs still WAITING.** Once a song starts playing it has left
 the queue and freed its slot, so everyone gets another turn as the night goes.
 
-**"Why can I only queue 3 on the laptop?"** The laptop only counts as the
+**"Why can I only queue a few on the laptop, and where is the gear?"**
+Same cause. The laptop only counts as the
 laptop when the browser is at **`http://localhost:8484/`**. Open it by the
 machine's LAN address instead — by scanning your own QR code, say — and the
-server sees an ordinary guest and applies the phone limit. If **⌃⌥H** does
-not open the host panel, that window is not being treated as the host.
+server sees an ordinary guest: the phone limit applies, the genre gear is
+hidden, and the host hotkeys do nothing. Press **⌃⌥H** there and it now
+tells you so. The Dock app always opens `localhost`, so this only happens if
+you navigate there yourself or scan your own QR code.
 
 ---
 

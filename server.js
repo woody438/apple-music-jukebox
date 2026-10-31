@@ -36,8 +36,8 @@ const CONFIG = {
   // Guest rules. Every one can be overridden in jukebox.conf, because the
   // night you want to change them is the night you least want to be editing
   // code -- and a local edit here would block the updater.
-  maxPerDevice: envNum('JUKEBOX_MAX_PER_PHONE', 3),    // queued picks per phone
-  maxPerHost: envNum('JUKEBOX_MAX_PER_LAPTOP', 10),    // the laptop counts as one device
+  maxPerDevice: envNum('JUKEBOX_MAX_PER_PHONE', 25),   // queued picks per phone
+  maxPerHost: envNum('JUKEBOX_MAX_PER_LAPTOP', 25),    // the laptop counts as one device
   maxQueueLength: envNum('JUKEBOX_MAX_QUEUE', 60),
   repeatWindowMin: envNum('JUKEBOX_REPEAT_MINUTES', 60),  // 0 disables it (host always exempt)
 

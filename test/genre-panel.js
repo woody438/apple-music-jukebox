@@ -1,6 +1,11 @@
 // Genre settings panel checks. OPTIONAL: needs Playwright.
 // Start the mock server first, then: node test/genre-panel.js
 //
+let chromium;
+try { ({ chromium } = require('playwright')); }
+catch (e) { console.log('SKIP  genre panel: Playwright is not installed.'); process.exit(0); }
+const BASE = process.env.JUKEBOX_URL || 'http://127.0.0.1:8484/';
+
 let pass=0, fail=0;
 const check=(ok,l,x)=>{console.log((ok?'PASS  ':'FAIL  ')+l+(x?'  --  '+x:''));ok?pass++:fail++;};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));

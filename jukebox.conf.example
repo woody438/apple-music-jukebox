@@ -18,12 +18,12 @@
 # --- Guest rules -----------------------------------------------------------
 # How many songs one phone may have WAITING at once. A song that has started
 # playing has left the queue and freed its slot.
-# JUKEBOX_MAX_PER_PHONE=3
+# JUKEBOX_MAX_PER_PHONE=25
 
 # The same, for the laptop. The laptop only counts as the laptop when the
 # browser is at http://localhost:8484/ -- open it by its LAN address and the
 # server sees an ordinary guest and applies the phone limit.
-# JUKEBOX_MAX_PER_LAPTOP=10
+# JUKEBOX_MAX_PER_LAPTOP=25
 
 # Total songs that may be queued by everyone.
 # JUKEBOX_MAX_QUEUE=60

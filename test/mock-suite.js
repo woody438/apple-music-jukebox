@@ -409,6 +409,9 @@ test('host endpoints answer the laptop and refuse everything else', async () => 
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: Object.assign({}, process.env, {
       MOCK: '1', PORT: String(port), JUKEBOX_DATA_DIR: tmp, MOCK_LIBRARY: '200',
+      // Explicit and different, so "a phone is told the GUEST limit" is
+      // testable whatever the shipped defaults happen to be.
+      JUKEBOX_MAX_PER_PHONE: '4', JUKEBOX_MAX_PER_LAPTOP: '11',
     }),
     stdio: VERBOSE ? 'inherit' : 'ignore',
   });
@@ -441,7 +444,8 @@ test('host endpoints answer the laptop and refuse everything else', async () => 
       }
       const cfgRemote = await (await fetch(`http://${remoteIp}:${port}/api/config`)).json();
       assert.equal(cfgRemote.isHost, false, 'a phone is not the host');
-      assert.equal(cfgRemote.maxPerDevice, 3, 'phones are told the guest limit');
+      assert.equal(cfgRemote.maxPerDevice, 4, 'phones are told the GUEST limit');
+      assert.equal(cfgLocal.maxPerDevice, 11, 'the laptop is told the HOST limit');
 
       // A phone can still read state and pick.
       const stRemote = await fetch(`http://${remoteIp}:${port}/api/state`);
