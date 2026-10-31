@@ -112,6 +112,16 @@ which is worse at a party.
 
 If it ever refuses to start, the reason is in `data/jukebox.log`.
 
+### Updating
+
+Double-click **`Update.command`**. It refuses to run while the jukebox is up,
+pulls the latest, and then runs the engine tests so you see green before you
+trust it. If the tests fail it tells you how to go back.
+
+There is **no automatic updater**, on purpose. An updater exists to change the
+code, and on the one night this matters that is risk with no upside. Update
+when you choose to, not mid-party.
+
 
 
 ### On the night
