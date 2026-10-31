@@ -148,8 +148,12 @@ have it, the official package if you don't. It will ask for your Mac password
 if it takes the second route:
 
 ```bash
-if command -v brew >/dev/null 2>&1; then brew install node; else ARCH=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64); VER=$(curl -fsSL https://nodejs.org/dist/index.json | python3 -c "import json,sys;print([r for r in json.load(sys.stdin) if r['lts']][0]['version'])"); curl -fsSL "https://nodejs.org/dist/$VER/node-$VER-darwin-$ARCH.pkg" -o /tmp/node.pkg && sudo installer -pkg /tmp/node.pkg -target /; fi
+if command -v brew >/dev/null 2>&1; then brew install node; else VER=$(curl -fsSL https://nodejs.org/dist/index.json | python3 -c "import json,sys;print([r for r in json.load(sys.stdin) if r.get('lts')][0]['version'])"); echo "Installing Node $VER..."; curl -fL --progress-bar "https://nodejs.org/dist/$VER/node-$VER.pkg" -o /tmp/node.pkg && sudo installer -pkg /tmp/node.pkg -target / && /usr/local/bin/node -v; fi
 ```
+
+The macOS installer is a **universal** package named `node-vX.Y.Z.pkg`, with
+no architecture in the name. The `-darwin-arm64` suffix belongs to the
+`.tar.gz` archives only, and using it on the `.pkg` gets you a 404.
 
 Both routes put Node where `Jukebox.app` looks for it (`/opt/homebrew/bin`
 or `/usr/local/bin`), which matters: an app launched from the Dock gets a
