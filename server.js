@@ -17,6 +17,15 @@ const { lanAddress, lanCandidates, primaryInterfaceName } = require('./lib/net')
 // ---------------------------------------------------------------------------
 // CONFIG -- the knobs worth turning on the night.
 // ---------------------------------------------------------------------------
+// Reads a number from the environment, keeping 0 as a real value -- `|| dflt`
+// would silently turn "no repeat window" back into 60 minutes.
+function envNum(name, dflt) {
+  const v = process.env[name];
+  if (v === undefined || v === '') return dflt;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
+}
+
 const CONFIG = {
   title: process.env.JUKEBOX_TITLE || 'JUKEBOX',
   playlistName: process.env.JUKEBOX_PLAYLIST || 'Jukebox',
@@ -24,11 +33,13 @@ const CONFIG = {
   port: Number(process.env.PORT) || 8484,   // 5000/7000 belong to AirPlay Receiver
   host: '0.0.0.0',
 
-  // Guest rules
-  maxPerDevice: 3,        // queued picks per phone
-  maxPerHost: 10,         // the laptop counts as one device
-  maxQueueLength: 60,
-  repeatWindowMin: 60,    // no repeat within this many minutes (host exempt)
+  // Guest rules. Every one can be overridden in jukebox.conf, because the
+  // night you want to change them is the night you least want to be editing
+  // code -- and a local edit here would block the updater.
+  maxPerDevice: envNum('JUKEBOX_MAX_PER_PHONE', 3),    // queued picks per phone
+  maxPerHost: envNum('JUKEBOX_MAX_PER_LAPTOP', 10),    // the laptop counts as one device
+  maxQueueLength: envNum('JUKEBOX_MAX_QUEUE', 60),
+  repeatWindowMin: envNum('JUKEBOX_REPEAT_MINUTES', 60),  // 0 disables it (host always exempt)
 
   // Phones get this URL on the QR code. Override if the laptop has several
   // interfaces and the detected one is wrong.
@@ -396,7 +407,12 @@ async function main() {
       log('      ...or put that line in jukebox.conf so the Dock app uses it too.');
     }
     log('');
-    log('  Full screen: control-command-F.  Host panel: control-option-H.');
+    log(`  Guests: ${CONFIG.maxPerDevice} queued each. Laptop: ${CONFIG.maxPerHost}. ` +
+        `Queue max ${CONFIG.maxQueueLength}. ` +
+        (CONFIG.repeatWindowMin ? `No repeat within ${CONFIG.repeatWindowMin} min.` : 'No repeat rule.'));
+    log('  The laptop only counts as the laptop at http://localhost -- not via its LAN address.');
+    log('');
+    log('  Full screen: control-command-F.  Host panel: control-option-H.  Genres: control-option-G.');
     log('');
   });
 }

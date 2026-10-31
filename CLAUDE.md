@@ -212,6 +212,20 @@ Guards: laptop only (never phones — battery), never over an open confirm card
 or search drawer, never while a search is active, and any input kills it.
 Separate from the 90s `IDLE_RESET_MS`, which resets genre and search.
 
+### Guest rules are configuration, not code
+
+All four live in `CONFIG` at the top of `server.js` but read from the
+environment (`JUKEBOX_MAX_PER_PHONE`, `_PER_LAPTOP`, `_MAX_QUEUE`,
+`_REPEAT_MINUTES`), so `jukebox.conf` can change them without a local edit
+that would block `Update.command`. `envNum` keeps `0` as a real value: a
+plain `|| dflt` would turn "no repeat window" back into 60 minutes.
+
+Host status is decided by `isLocalRequest`, i.e. the socket's address, not by
+anything the client sends. So the laptop gets the laptop's allowance only at
+`http://localhost`; opened by its own LAN address it is an ordinary guest.
+That is correct -- it is what stops a phone claiming host rights -- but it
+surprises the host, so the startup log says it.
+
 ## Safety rules around the library
 
 These are not negotiable. It is somebody's real music library.

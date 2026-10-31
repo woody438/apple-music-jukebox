@@ -410,13 +410,25 @@ the jukebox. `jukebox.conf` is per-machine and is not tracked by git.
 
 Set at the top of `server.js`:
 
-| Rule | Default |
-|---|---|
-| Queued picks per phone | 3 |
-| Queued picks for the laptop | 10 |
-| Maximum queue length | 60 |
-| No repeat within | 60 minutes (the host is exempt) |
-| No duplicate of the playing or a queued song | always |
+| Rule | Default | Change it with |
+|---|---|---|
+| Queued picks per phone | 3 | `JUKEBOX_MAX_PER_PHONE` |
+| Queued picks for the laptop | 10 | `JUKEBOX_MAX_PER_LAPTOP` |
+| Maximum queue length | 60 | `JUKEBOX_MAX_QUEUE` |
+| No repeat within | 60 minutes (the laptop is exempt) | `JUKEBOX_REPEAT_MINUTES`, `0` turns it off |
+| No duplicate of the playing or a queued song | always | — |
+
+Set any of them in `jukebox.conf` (copy `jukebox.conf.example`) and restart.
+The startup log prints the rules in force.
+
+**The cap is on songs still WAITING.** Once a song starts playing it has left
+the queue and freed its slot, so everyone gets another turn as the night goes.
+
+**"Why can I only queue 3 on the laptop?"** The laptop only counts as the
+laptop when the browser is at **`http://localhost:8484/`**. Open it by the
+machine's LAN address instead — by scanning your own QR code, say — and the
+server sees an ordinary guest and applies the phone limit. If **⌃⌥H** does
+not open the host panel, that window is not being treated as the host.
 
 ---
 
