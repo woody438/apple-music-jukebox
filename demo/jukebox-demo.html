@@ -284,6 +284,17 @@ input { font-family: inherit; }
   box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
 }
 
+.gear-btn {
+  flex: 0 0 auto; width: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, var(--chrome-1), var(--chrome-2) 48%, var(--chrome-3) 52%, var(--chrome-4));
+  border: 1px solid #6b7480; border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
+}
+.gear-btn svg { width: 16px; height: 16px; fill: none; stroke: #2b3038; stroke-width: 1.9; stroke-linecap: round; }
+.gear-btn.on { background: linear-gradient(180deg, #ff6aa8, var(--neon-pink)); border-color: #ff9ac4; }
+.gear-btn.on svg { stroke: #fff; }
+
 .search-toggle {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 7px;
@@ -689,6 +700,24 @@ body.attract .pageno::after {
 .keys td:first-child { width: 110px; font-weight: 700; color: var(--neon-amber); }
 
 .host-status { font-size: 12px; line-height: 1.65; color: rgba(255,255,255,.66); }
+
+/* ---------- genre settings ---------------------------------------------- */
+.gp-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.66); }
+.gp-note strong { color: var(--neon-amber); }
+.gp-count { align-self: center; font-size: 11px; letter-spacing: .14em; color: rgba(255,255,255,.5); }
+.gp-list {
+  margin-top: 14px; max-height: 46dvh; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 14px;
+}
+.gp-list label {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 8px; border-radius: 6px; font-size: 13.5px;
+  color: rgba(255,255,255,.86);
+}
+.gp-list label:hover { background: rgba(255,255,255,.06); }
+.gp-list input { width: 16px; height: 16px; accent-color: var(--neon-pink); flex: 0 0 auto; }
+.gp-list .gp-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp-list .gp-n { flex: 0 0 auto; font-size: 11px; color: rgba(255,255,255,.42); font-variant-numeric: tabular-nums; }
 .host-status .err { color: #ff8aa8; }
 
 /* ---------- phone mini bar ---------------------------------------------- */
@@ -853,6 +882,9 @@ html, body { height: 100%; }
           <button class="scroll-arrow" id="genreLeft" type="button" aria-label="More genres left" hidden>&#9664;</button>
           <div class="genres" id="genres" role="group" aria-label="Choose a genre"></div>
           <button class="scroll-arrow" id="genreRight" type="button" aria-label="More genres right" hidden>&#9654;</button>
+          <button class="gear-btn" id="genreSettings" type="button" aria-label="Choose which genres show" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>
+          </button>
           <button class="search-toggle" id="searchToggle" type="button" aria-expanded="false" aria-controls="searchDrawer">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.4" y1="15.4" x2="21" y2="21"/></svg>
             <span>SEARCH</span>
@@ -994,12 +1026,33 @@ html, body { height: 100%; }
       <tr><td>&#8963;&#8997;&uarr; / &darr;</td><td>Volume &plusmn;10</td></tr>
       <tr><td>&#8963;&#8997;&#9003;</td><td>Remove the last queued pick</td></tr>
       <tr><td>&#8963;&#8997;H</td><td>This panel</td></tr>
+      <tr><td>&#8963;&#8997;G</td><td>Choose which genres get a button</td></tr>
       <tr><td>&#8963;&#8997;R</td><td>Re-index the library</td></tr>
       <tr><td>&#8963;&#8997;F</td><td>Full screen</td></tr>
     </table>
 
     <h3>STATUS</h3>
     <div class="host-status" id="hostStatus"></div>
+  </div>
+</div>
+
+<!-- genre settings (laptop only) -->
+<div class="modal host" id="genrePanel" hidden>
+  <div class="host-card" role="dialog" aria-modal="true" aria-label="Genre buttons">
+    <header>
+      <h2>GENRE BUTTONS</h2>
+      <button class="x" id="genreClose" type="button" aria-label="Close">&times;</button>
+    </header>
+    <p class="gp-note">Tick the genres you want along the top. Everything you leave
+      unticked is still reachable through <strong>OTHER</strong> and through search.
+      This applies to the phones too.</p>
+    <div class="host-row">
+      <button class="hbtn" id="gpAuto" type="button">Biggest 18 automatically</button>
+      <button class="hbtn" id="gpAll" type="button">Tick all</button>
+      <button class="hbtn" id="gpNone" type="button">Untick all</button>
+      <span class="gp-count" id="gpCount"></span>
+    </div>
+    <div class="gp-list" id="gpList"></div>
   </div>
 </div>
 

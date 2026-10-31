@@ -237,6 +237,17 @@ input { font-family: inherit; }
   box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
 }
 
+.gear-btn {
+  flex: 0 0 auto; width: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, var(--chrome-1), var(--chrome-2) 48%, var(--chrome-3) 52%, var(--chrome-4));
+  border: 1px solid #6b7480; border-radius: 7px;
+  box-shadow: 0 2px 5px rgba(0,0,0,.45), inset 0 1px 1px #fff;
+}
+.gear-btn svg { width: 16px; height: 16px; fill: none; stroke: #2b3038; stroke-width: 1.9; stroke-linecap: round; }
+.gear-btn.on { background: linear-gradient(180deg, #ff6aa8, var(--neon-pink)); border-color: #ff9ac4; }
+.gear-btn.on svg { stroke: #fff; }
+
 .search-toggle {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: 7px;
@@ -642,6 +653,24 @@ body.attract .pageno::after {
 .keys td:first-child { width: 110px; font-weight: 700; color: var(--neon-amber); }
 
 .host-status { font-size: 12px; line-height: 1.65; color: rgba(255,255,255,.66); }
+
+/* ---------- genre settings ---------------------------------------------- */
+.gp-note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.55; color: rgba(255,255,255,.66); }
+.gp-note strong { color: var(--neon-amber); }
+.gp-count { align-self: center; font-size: 11px; letter-spacing: .14em; color: rgba(255,255,255,.5); }
+.gp-list {
+  margin-top: 14px; max-height: 46dvh; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 14px;
+}
+.gp-list label {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 8px; border-radius: 6px; font-size: 13.5px;
+  color: rgba(255,255,255,.86);
+}
+.gp-list label:hover { background: rgba(255,255,255,.06); }
+.gp-list input { width: 16px; height: 16px; accent-color: var(--neon-pink); flex: 0 0 auto; }
+.gp-list .gp-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp-list .gp-n { flex: 0 0 auto; font-size: 11px; color: rgba(255,255,255,.42); font-variant-numeric: tabular-nums; }
 .host-status .err { color: #ff8aa8; }
 
 /* ---------- phone mini bar ---------------------------------------------- */

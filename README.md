@@ -95,6 +95,25 @@ Work down this list. The first four are the ones that actually ruin parties.
 
 ## Running it
 
+### The Dock app
+
+`Jukebox.app` sits in the repo. Drag it to the Dock once (then right-click it
+there and pick **Options → Keep in Dock**).
+
+- **Double-click: starts.** It opens Music if it isn't open, starts the
+  server, stops the Mac sleeping, and opens the jukebox in your browser.
+- **Double-click again: stops.**
+
+There is no "are you sure" on stopping, on purpose. Stopping the jukebox
+does **not** stop Music — the room keeps playing whatever is on — and
+starting it again restores the queue, so a mis-click costs one more click.
+A confirmation dialog would need its own permission and could fail quietly,
+which is worse at a party.
+
+If it ever refuses to start, the reason is in `data/jukebox.log`.
+
+
+
 ### On the night
 
 Double-click **`start.command`**. It checks Node, opens Music if it is not
@@ -184,6 +203,12 @@ Three ways in, in the order a guest will reach for them:
    Separators are left alone — deciding that `Hip-Hop` and `Hip Hop` are the
    same thing is an opinion about your tags, not ours to impose.
 
+   **To choose the genres yourself**, press **⌃⌥G** on the laptop, or click
+   the small gear at the right of the genre bar. Tick whichever you want.
+   The choice is held on the server, so the phones follow it immediately, and
+   it survives a restart. Anything unticked is still reachable through
+   **OTHER** and through search. "Biggest 18 automatically" puts it back.
+
 2. **The A–Z rail** along the bottom jumps by artist, and it tracks whichever
    genre you are in — a genre with no Q artists greys its Q out.
 
@@ -225,6 +250,7 @@ reach them, so nobody can skip your song from the kitchen.
 | **⌃⌥↑ / ⌃⌥↓** | Volume ±10 |
 | **⌃⌥⌫** | Remove the last queued pick |
 | **⌃⌥H** | Host panel — queue, remove, clear, volume, re-index, last error |
+| **⌃⌥G** | Choose which genres get a button |
 | **⌃⌥R** | Re-index the library |
 | **⌃⌥F** | Full screen |
 

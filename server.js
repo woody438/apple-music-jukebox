@@ -348,6 +348,9 @@ async function handle(req, res) {
       case 'remove':     return sendJson(res, 200, engine.removeByEntryId(String(body.id || '')));
       case 'remove-last':return sendJson(res, 200, engine.removeLast());
       case 'clear':      return sendJson(res, 200, await engine.clearQueue());
+      case 'genres':
+        return sendJson(res, 200, engine.setVisibleGenres(
+          body.genres === null || body.genres === undefined ? null : body.genres));
       case 'reindex':
         try {
           const ix = await engine.reindex();

@@ -1,0 +1,78 @@
+#!/bin/bash
+# Party Jukebox launcher. Double-click to start, double-click again to stop.
+#
+# Deliberately has no confirmation dialog. Stopping the jukebox does NOT stop
+# Music -- the room keeps playing whatever is on -- and restarting restores
+# the queue from data/state.json, so an accidental stop costs one more click.
+# A dialog would need its own automation permission and could fail silently,
+# which is worse at a party than a cheap mistake.
+
+set -u
+
+# This app lives at the root of the repo it runs.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../../.." && pwd)"
+PORT="${PORT:-8484}"
+LOG="$REPO/data/jukebox.log"
+
+note() { osascript -e "display notification \"$1\" with title \"Party Jukebox\"" >/dev/null 2>&1; }
+
+fail() {
+  note "$1"
+  osascript -e "display dialog \"$1\" buttons {\"OK\"} default button \"OK\" with icon stop with title \"Party Jukebox\"" >/dev/null 2>&1
+  exit 1
+}
+
+# A GUI-launched app gets a bare PATH, so Homebrew's node is not on it.
+NODE=""
+for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+  [ -x "$candidate" ] && NODE="$candidate" && break
+done
+[ -z "$NODE" ] && NODE="$(command -v node 2>/dev/null || true)"
+[ -z "$NODE" ] && fail "Node.js was not found. Open Terminal and run: brew install node"
+
+# Ask the port, not a pid file: this also finds a server started from Terminal.
+listening_pid() { /usr/sbin/lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | head -1; }
+
+PID="$(listening_pid)"
+
+if [ -n "$PID" ]; then
+  # ---- running: stop it ----
+  kill "$PID" 2>/dev/null
+  for _ in $(seq 1 20); do
+    sleep 0.25
+    [ -z "$(listening_pid)" ] && break
+  done
+  if [ -n "$(listening_pid)" ]; then
+    kill -9 "$(listening_pid)" 2>/dev/null
+    sleep 0.5
+  fi
+  note "Stopped. Music carries on playing."
+  exit 0
+fi
+
+# ---- not running: start it ----
+mkdir -p "$REPO/data"
+open -ga Music 2>/dev/null || true
+
+cd "$REPO" || fail "Could not find the jukebox folder."
+: > "$LOG"
+PORT="$PORT" nohup "$NODE" server.js >>"$LOG" 2>&1 &
+SERVER_PID=$!
+
+# No sleep and no display sleep for exactly as long as the server lives.
+nohup caffeinate -dimsu -w "$SERVER_PID" >/dev/null 2>&1 &
+
+for _ in $(seq 1 90); do
+  if /usr/bin/curl -fsS "http://127.0.0.1:$PORT/api/config" >/dev/null 2>&1; then
+    open "http://localhost:$PORT/"
+    note "Running. Press control-command-F for full screen."
+    exit 0
+  fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    fail "The jukebox stopped while starting. See data/jukebox.log"
+  fi
+  sleep 1
+done
+
+fail "The jukebox did not come up in 90 seconds. See data/jukebox.log"

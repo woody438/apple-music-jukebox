@@ -49,6 +49,8 @@ test/ui-suite.js     browser tests, optional, needs Playwright
 test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
 tools/check-timing.js  read-only: state-read latency, and duration vs finish
+Jukebox.app/         Dock launcher: double-click toggles the server on/off
+test/genre-panel.js  browser tests for the genre settings panel
 demo/                self-contained UI demo: build.js welds the real markup,
                      stylesheet and fonts to an in-page simulator (demo-app.js)
                      plus a 338-track demo library. Proves nothing about Music.

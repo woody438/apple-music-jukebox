@@ -73,6 +73,7 @@ var genres = [];            // [{ name, count }] by count desc
 var topGenreNames = {};     // the ones with their own button
 var genre = ALL;
 var query = '';
+var visibleGenres = null;   // from the server; null = pick the biggest automatically
 
 var view = [];              // what is currently being paged through
 var viewLetterStart = {};   // A-Z positions WITHIN the current view
@@ -109,6 +110,7 @@ function boot() {
     $('jbTitle').textContent = c.title || 'JUKEBOX';
     document.title = c.title || 'Jukebox';
     if (c.isHost && !isPhone) {
+      $('genreSettings').hidden = false;
       setupQr(c.guestUrl);
       bindHotkeys();
       startIdleWatch();
@@ -196,12 +198,23 @@ function buildGenreBar() {
   var el = $('genres');
   el.textContent = '';
 
-  var top = genres.slice(0, MAX_GENRE_BUTTONS);
+  // The host can pick the genres by hand; otherwise take the biggest.
+  var top;
+  if (visibleGenres) {
+    var wanted = Object.create(null);
+    visibleGenres.forEach(function (n) { wanted[n] = true; });
+    top = genres.filter(function (g) { return wanted[g.name]; });
+  } else {
+    top = genres.slice(0, MAX_GENRE_BUTTONS);
+  }
+
   topGenreNames = Object.create(null);
   top.forEach(function (g) { topGenreNames[g.name] = true; });
 
   var tailCount = 0;
-  for (var i = MAX_GENRE_BUTTONS; i < genres.length; i++) tailCount += genres[i].count;
+  for (var i = 0; i < genres.length; i++) {
+    if (!topGenreNames[genres[i].name]) tailCount += genres[i].count;
+  }
 
   var buttons = [{ key: ALL, label: 'ALL', count: rows.length }];
   top.forEach(function (g) { buttons.push({ key: g.name, label: g.name, count: g.count }); });
@@ -227,6 +240,11 @@ function buildGenreBar() {
 
   markGenre();
   updateGenreArrows();
+}
+
+function genreStillShown() {
+  if (genre === ALL || genre === OTHER) return true;
+  return !!topGenreNames[genre];
 }
 
 function markGenre() {
@@ -484,7 +502,7 @@ function attractStep() {
   attractTimer = setTimeout(function () {
     if (!attractOn) return;
     // Never flip the page out from under an open dialog.
-    if ($('confirm').hidden && $('searchDrawer').hidden && !query) {
+    if ($('confirm').hidden && $('searchDrawer').hidden && $('genrePanel').hidden && !query) {
       var total = Math.max(1, Math.ceil(view.length / pageSize));
       var current = Math.floor(pageStart / pageSize);
       if (current + 1 < total) {
@@ -612,8 +630,18 @@ function connectSse() {
 
 function applySnapshot(s) {
   var prevIndexVersion = snap ? snap.indexVersion : null;
+  var prevVisible = JSON.stringify(visibleGenres);
   snap = s;
   snapAt = Date.now();
+
+  // The host changed which genres get a button; everyone follows.
+  visibleGenres = s.visibleGenres || null;
+  if (JSON.stringify(visibleGenres) !== prevVisible && rows.length) {
+    buildGenreBar();
+    paintGenrePanel();
+    if (!genreStillShown()) { genre = ALL; markGenre(); }
+    applyFilters();
+  }
 
   queuedPids = Object.create(null);
   (s.queuedPids || []).forEach(function (p) { queuedPids[p] = true; });
@@ -747,6 +775,61 @@ function paintQueue() {
 }
 
 // ---------------------------------------------------------------------------
+// genre settings (laptop only -- phones never see host UI)
+// ---------------------------------------------------------------------------
+function toggleGenrePanel() {
+  var p = $('genrePanel');
+  p.hidden = !p.hidden;
+  $('genreSettings').classList.toggle('on', !p.hidden);
+  if (!p.hidden) paintGenrePanel();
+  kickIdle();
+  kickAttract();
+}
+
+function shownSet() {
+  var set = Object.create(null);
+  (visibleGenres || genres.slice(0, MAX_GENRE_BUTTONS).map(function (g) { return g.name; }))
+    .forEach(function (n) { set[n] = true; });
+  return set;
+}
+
+function paintGenrePanel() {
+  if ($('genrePanel').hidden) return;
+  var set = shownSet();
+  var list = $('gpList');
+  list.textContent = '';
+
+  genres.forEach(function (g) {
+    var label = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!set[g.name];
+    cb.addEventListener('change', function () { saveGenreSelection(); });
+    cb.dataset.genre = g.name;
+    var name = document.createElement('span');
+    name.className = 'gp-name';
+    name.textContent = g.name;
+    var n = document.createElement('span');
+    n.className = 'gp-n';
+    n.textContent = g.count.toLocaleString();
+    label.appendChild(cb); label.appendChild(name); label.appendChild(n);
+    list.appendChild(label);
+  });
+
+  var on = Object.keys(set).length;
+  $('gpCount').textContent = (visibleGenres ? on + ' CHOSEN' : 'AUTOMATIC (' + on + ')') +
+                             ' OF ' + genres.length;
+}
+
+function saveGenreSelection() {
+  var chosen = [];
+  Array.prototype.forEach.call($('gpList').querySelectorAll('input'), function (cb) {
+    if (cb.checked) chosen.push(cb.dataset.genre);
+  });
+  host('genres', { genres: chosen });
+}
+
+// ---------------------------------------------------------------------------
 // QR
 // ---------------------------------------------------------------------------
 function setupQr(url) {
@@ -802,6 +885,9 @@ function bindHotkeys() {
         break;
       case 'KeyH':
         toggleHost();
+        break;
+      case 'KeyG':
+        toggleGenrePanel();
         break;
       case 'KeyR':
         toast('Re-indexing the library...');
@@ -896,6 +982,8 @@ function kickIdle() {
     applyFilters();
     closeConfirm();
     $('hostPanel').hidden = true;
+    $('genrePanel').hidden = true;
+    $('genreSettings').classList.remove('on');
   }, IDLE_RESET_MS);
 }
 
@@ -923,6 +1011,15 @@ function bindUi() {
   });
   $('searchToggle').addEventListener('click', toggleSearch);
   $('searchClose').addEventListener('click', function () { closeSearch(true); });
+
+  $('genreSettings').addEventListener('click', toggleGenrePanel);
+  $('genreClose').addEventListener('click', toggleGenrePanel);
+  $('gpAuto').addEventListener('click', function () { host('genres', { genres: null }); });
+  $('gpAll').addEventListener('click', function () {
+    host('genres', { genres: genres.map(function (g) { return g.name; }) });
+  });
+  $('gpNone').addEventListener('click', function () { host('genres', { genres: [] }); });
+  $('genrePanel').addEventListener('click', function (e) { if (e.target === $('genrePanel')) toggleGenrePanel(); });
 
   $('genreLeft').addEventListener('click', function () { $('genres').scrollLeft -= 240; });
   $('genreRight').addEventListener('click', function () { $('genres').scrollLeft += 240; });
@@ -961,6 +1058,7 @@ function bindUi() {
     if (e.key === 'Escape') {
       if (!$('confirm').hidden) { closeConfirm(); return; }
       if (!$('hostPanel').hidden) { $('hostPanel').hidden = true; return; }
+      if (!$('genrePanel').hidden) { toggleGenrePanel(); return; }
       if (!$('searchDrawer').hidden) { closeSearch(true); search.blur(); return; }
       return;
     }

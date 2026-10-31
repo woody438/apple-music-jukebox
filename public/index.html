@@ -37,6 +37,9 @@
           <button class="scroll-arrow" id="genreLeft" type="button" aria-label="More genres left" hidden>&#9664;</button>
           <div class="genres" id="genres" role="group" aria-label="Choose a genre"></div>
           <button class="scroll-arrow" id="genreRight" type="button" aria-label="More genres right" hidden>&#9654;</button>
+          <button class="gear-btn" id="genreSettings" type="button" aria-label="Choose which genres show" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>
+          </button>
           <button class="search-toggle" id="searchToggle" type="button" aria-expanded="false" aria-controls="searchDrawer">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.4" y1="15.4" x2="21" y2="21"/></svg>
             <span>SEARCH</span>
@@ -178,12 +181,33 @@
       <tr><td>&#8963;&#8997;&uarr; / &darr;</td><td>Volume &plusmn;10</td></tr>
       <tr><td>&#8963;&#8997;&#9003;</td><td>Remove the last queued pick</td></tr>
       <tr><td>&#8963;&#8997;H</td><td>This panel</td></tr>
+      <tr><td>&#8963;&#8997;G</td><td>Choose which genres get a button</td></tr>
       <tr><td>&#8963;&#8997;R</td><td>Re-index the library</td></tr>
       <tr><td>&#8963;&#8997;F</td><td>Full screen</td></tr>
     </table>
 
     <h3>STATUS</h3>
     <div class="host-status" id="hostStatus"></div>
+  </div>
+</div>
+
+<!-- genre settings (laptop only) -->
+<div class="modal host" id="genrePanel" hidden>
+  <div class="host-card" role="dialog" aria-modal="true" aria-label="Genre buttons">
+    <header>
+      <h2>GENRE BUTTONS</h2>
+      <button class="x" id="genreClose" type="button" aria-label="Close">&times;</button>
+    </header>
+    <p class="gp-note">Tick the genres you want along the top. Everything you leave
+      unticked is still reachable through <strong>OTHER</strong> and through search.
+      This applies to the phones too.</p>
+    <div class="host-row">
+      <button class="hbtn" id="gpAuto" type="button">Biggest 18 automatically</button>
+      <button class="hbtn" id="gpAll" type="button">Tick all</button>
+      <button class="hbtn" id="gpNone" type="button">Untick all</button>
+      <span class="gp-count" id="gpCount"></span>
+    </div>
+    <div class="gp-list" id="gpList"></div>
   </div>
 </div>
 
