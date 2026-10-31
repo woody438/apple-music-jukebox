@@ -51,6 +51,7 @@ tools/build-fonts.js regenerates public/fonts.css from assets/fonts
 tools/check-timing.js  read-only: state-read latency, and duration vs finish
 Jukebox.app/         Dock launcher: double-click toggles the server on/off
 Update.command       manual update: refuses while running, pulls, runs tests
+tools/add-to-dock.command  puts Jukebox.app on the Dock, optionally at a slot
 test/genre-panel.js  browser tests for the genre settings panel
 demo/                self-contained UI demo: build.js welds the real markup,
                      stylesheet and fonts to an in-page simulator (demo-app.js)
@@ -236,6 +237,7 @@ These are not negotiable. It is somebody's real music library.
 | Guest Wi-Fi client isolation | Phones load nothing | README checklist item 4 |
 | Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
 | `position` jitter from Music | Handoff fires slightly early or late | 250 ms margin in the missed-handoff test; handoff clips <1 s by design |
+| **Nothing on screen says the jukebox is running.** The launcher is `LSUIElement` and the server is detached, so it is easy to leave up after the party. | A Mac kept awake all night | `caffeinate` is capped at `AWAKE_LIMIT_SECONDS` (12h). A menu bar indicator would be the real fix; it needs an `NSStatusItem` and so a process that stays alive, which is not something to introduce untested. |
 
 ## How to run things
 

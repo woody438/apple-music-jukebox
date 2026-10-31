@@ -14,6 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 PORT="${PORT:-8484}"
 LOG="$REPO/data/jukebox.log"
+AWAKE_LIMIT_SECONDS="${AWAKE_LIMIT_SECONDS:-43200}"   # 12 hours
 
 note() { osascript -e "display notification \"$1\" with title \"Party Jukebox\"" >/dev/null 2>&1; }
 
@@ -60,13 +61,17 @@ cd "$REPO" || fail "Could not find the jukebox folder."
 PORT="$PORT" nohup "$NODE" server.js >>"$LOG" 2>&1 &
 SERVER_PID=$!
 
-# No sleep and no display sleep for exactly as long as the server lives.
-nohup caffeinate -dimsu -w "$SERVER_PID" >/dev/null 2>&1 &
+# No sleep and no display sleep while the server lives -- but capped, because
+# this app leaves nothing on screen to remind you it is running. Without the
+# cap, a jukebox forgotten after the party keeps the Mac awake all night and
+# flattens the battery. Twelve hours outlasts any party and still gives up by
+# morning.
+nohup caffeinate -dimsu -t "$AWAKE_LIMIT_SECONDS" -w "$SERVER_PID" >/dev/null 2>&1 &
 
 for _ in $(seq 1 90); do
   if /usr/bin/curl -fsS "http://127.0.0.1:$PORT/api/config" >/dev/null 2>&1; then
     open "http://localhost:$PORT/"
-    note "Running. Press control-command-F for full screen."
+    note "Running. Double-click again to stop it."
     exit 0
   fi
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then

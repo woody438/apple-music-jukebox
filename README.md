@@ -118,6 +118,49 @@ defaults write com.apple.dock persistent-apps -array-add "<dict><key>tile-data</
 If Finder shows it as a plain folder instead of an app, it just has not
 noticed yet — `touch ~/Developer/apple-music-jukebox/Jukebox.app` and it will.
 
+**To put it in a particular spot** (handy for making a second Mac match the
+first), positions count app icons from the left starting at 1:
+
+```bash
+./tools/add-to-dock.command 3
+```
+
+To see what order a Dock is in now:
+
+```bash
+defaults export com.apple.dock - | python3 -c "import plistlib,sys;print(' | '.join('%d:%s'%(i+1,e['tile-data']['file-label']) for i,e in enumerate(plistlib.loads(sys.stdin.buffer.read()).get('persistent-apps',[]))))"
+```
+
+### A second Mac
+
+Same three steps, in this order:
+
+```bash
+node -v
+```
+
+```bash
+git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
+```
+
+```bash
+cd ~/Developer/apple-music-jukebox && node preflight.js && ./tools/add-to-dock.command
+```
+
+**Run preflight on the new machine too.** It is a different Mac: it needs its
+own "control Music" permission, its own Node, and its own check that nothing
+in your library trips it up. Do not assume it works because the first one did.
+
+Two things that catch people out:
+
+- **Persistent IDs are per-library, not per-account.** Even with the same
+  iCloud Music Library, a track's ID differs between Macs. Nothing transfers
+  between them — each builds its own index, and a queue saved on one is
+  meaningless on the other. (`data/` is not in git, so this sorts itself out.)
+- **Do not run both at once on the same Wi-Fi.** Guests scan whichever QR
+  code is in front of them, and half the picks end up on a laptop that is not
+  plugged into the PA. One jukebox per party.
+
 - **Double-click: starts.** It opens Music if it isn't open, starts the
   server, stops the Mac sleeping, and opens the jukebox in your browser.
 - **Double-click again: stops.**
@@ -129,6 +172,11 @@ A confirmation dialog would need its own permission and could fail quietly,
 which is worse at a party.
 
 If it ever refuses to start, the reason is in `data/jukebox.log`.
+
+**It leaves nothing on screen while it runs**, so it caps how long it keeps
+the Mac awake at 12 hours — long enough to outlast any party, short enough
+that a jukebox forgotten overnight does not flatten the battery. Override
+with `AWAKE_LIMIT_SECONDS` if you need to.
 
 ### Updating
 
