@@ -133,15 +133,29 @@ defaults export com.apple.dock - | python3 -c "import plistlib,sys;print(' | '.j
 
 ### A second Mac
 
-Same three steps, in this order:
+```bash
+git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
+```
+
+Then check Node is there:
 
 ```bash
 node -v
 ```
 
+**`command not found: node`?** This installs it either way — Homebrew if you
+have it, the official package if you don't. It will ask for your Mac password
+if it takes the second route:
+
 ```bash
-git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
+if command -v brew >/dev/null 2>&1; then brew install node; else ARCH=$([ "$(uname -m)" = arm64 ] && echo arm64 || echo x64); VER=$(curl -fsSL https://nodejs.org/dist/index.json | python3 -c "import json,sys;print([r for r in json.load(sys.stdin) if r['lts']][0]['version'])"); curl -fsSL "https://nodejs.org/dist/$VER/node-$VER-darwin-$ARCH.pkg" -o /tmp/node.pkg && sudo installer -pkg /tmp/node.pkg -target /; fi
 ```
+
+Both routes put Node where `Jukebox.app` looks for it (`/opt/homebrew/bin`
+or `/usr/local/bin`), which matters: an app launched from the Dock gets a
+bare `PATH` and cannot see your shell's.
+
+Then:
 
 ```bash
 cd ~/Developer/apple-music-jukebox && node preflight.js && ./tools/add-to-dock.command
