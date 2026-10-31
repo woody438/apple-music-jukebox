@@ -16,6 +16,12 @@ PORT="${PORT:-8484}"
 LOG="$REPO/data/jukebox.log"
 AWAKE_LIMIT_SECONDS="${AWAKE_LIMIT_SECONDS:-43200}"   # 12 hours
 
+# Per-machine settings, if there are any. An app launched from the Dock has no
+# shell, so this is the only way to give it PUBLIC_URL -- which a Mac with two
+# network adapters needs, because the address guessed from the routing table
+# may not be the network the phones are on.
+[ -f "$REPO/jukebox.conf" ] && . "$REPO/jukebox.conf"
+
 note() { osascript -e "display notification \"$1\" with title \"Party Jukebox\"" >/dev/null 2>&1; }
 
 fail() {
@@ -58,7 +64,7 @@ open -ga Music 2>/dev/null || true
 
 cd "$REPO" || fail "Could not find the jukebox folder."
 : > "$LOG"
-PORT="$PORT" nohup "$NODE" server.js >>"$LOG" 2>&1 &
+PORT="$PORT" PUBLIC_URL="${PUBLIC_URL:-}" JUKEBOX_TITLE="${JUKEBOX_TITLE:-}" JUKEBOX_PLAYLIST="${JUKEBOX_PLAYLIST:-}" nohup "$NODE" server.js >>"$LOG" 2>&1 &
 SERVER_PID=$!
 
 # No sleep and no display sleep while the server lives -- but capped, because

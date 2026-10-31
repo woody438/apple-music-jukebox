@@ -297,8 +297,10 @@ Three ways in, in the order a guest will reach for them:
    Separators are left alone — deciding that `Hip-Hop` and `Hip Hop` are the
    same thing is an opinion about your tags, not ours to impose.
 
-   **To choose the genres yourself**, press **⌃⌥G** on the laptop, or click
-   the small gear at the right of the genre bar. Tick whichever you want.
+   **To choose the genres yourself: press ⌃⌥G** (control-option-G) on the
+   laptop. Or click the small **gear icon** at the right-hand end of the genre
+   bar, just before the SEARCH button — it is only there on the laptop, never
+   on a phone. Tick whichever you want.
    The choice is held on the server, so the phones follow it immediately, and
    it survives a restart. Anything unticked is still reachable through
    **OTHER** and through search. "Biggest 18 automatically" puts it back.
@@ -344,7 +346,7 @@ reach them, so nobody can skip your song from the kitchen.
 | **⌃⌥↑ / ⌃⌥↓** | Volume ±10 |
 | **⌃⌥⌫** | Remove the last queued pick |
 | **⌃⌥H** | Host panel — queue, remove, clear, volume, re-index, last error |
-| **⌃⌥G** | Choose which genres get a button |
+| **⌃⌥G** | **Choose which genres get a button** (or click the gear on the genre bar) |
 | **⌃⌥R** | Re-index the library |
 | **⌃⌥F** | Full screen |
 
@@ -366,6 +368,7 @@ up but nothing starts until you press play again.
 | Preflight fails at "control Music" | The automation permission was never granted | System Settings → Privacy & Security → Automation → your Terminal → tick **Music**, then run preflight again |
 | Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output. (Passed 17/17 on macOS 25.6 / Node 26.8 over a 13,375-track library.) |
 | Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the URL on your own phone first |
+| The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox advertised the wrong one | See below — pin the right one in `jukebox.conf` |
 | Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
 | Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
 | Music stops dead when the queue runs out | Autoplay (∞) is off | Open Playing Next in Music and light up the **∞** |
@@ -376,6 +379,30 @@ up but nothing starts until you press play again.
 
 The host panel (**⌃⌥H**) shows the last error the engine hit. That's the first
 place to look when something is off.
+
+### Two network adapters
+
+A Mac with both Ethernet and Wi-Fi has two addresses, and only one of them is
+on the network the phones are using. The jukebox follows the routing table —
+the adapter the Mac actually sends traffic out of — and prints every address
+it found at startup, marking the one it chose. If that's the wrong one, don't
+unplug anything; just pin the right one.
+
+Find the addresses:
+
+```bash
+for i in en0 en1 en2 en3 en4; do ip=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i = $ip"; done
+```
+
+Pin it, so the Dock app uses it too (an app launched from the Dock has no
+shell, so an environment variable set in Terminal never reaches it):
+
+```bash
+cd ~/Developer/apple-music-jukebox && cp jukebox.conf.example jukebox.conf && open -e jukebox.conf
+```
+
+Uncomment the `PUBLIC_URL` line, put the right address in, save, and restart
+the jukebox. `jukebox.conf` is per-machine and is not tracked by git.
 
 ---
 

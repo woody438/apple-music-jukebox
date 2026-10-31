@@ -40,6 +40,7 @@ lib/mock-music.js    simulated Music, same API, for tests and demos
 lib/library.js       raw columns -> index (filters, sort, codes, genres)
 lib/util.js          enum normalising, accent folding, sort keys
 lib/state.js         data/state.json, atomic write-then-rename
+lib/net.js           which LAN address to put on the QR code
 scripts/*.js         JXA READS, returning JSON
 scripts/*.applescript  AppleScript WRITES
 public/              the UI: index.html, style.css, app.js, fonts.css
@@ -237,6 +238,7 @@ These are not negotiable. It is somebody's real music library.
 | Guest Wi-Fi client isolation | Phones load nothing | README checklist item 4 |
 | Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
 | `position` jitter from Music | Handoff fires slightly early or late | 250 ms margin in the missed-handoff test; handoff clips <1 s by design |
+| **Two network adapters.** A Mac mini has Ethernet and Wi-Fi; only one is the network the phones are on. | Guests get a QR code for an address they cannot reach | `lib/net.js` follows the routing table, never the interface name: en0 is Wi-Fi on a laptop but Ethernet on a mini, so the name means nothing. Startup prints every address found and marks the chosen one. `PUBLIC_URL` in `jukebox.conf` overrides, and the Dock app reads that file because it has no shell. |
 | **Nothing on screen says the jukebox is running.** The launcher is `LSUIElement` and the server is detached, so it is easy to leave up after the party. | A Mac kept awake all night | `caffeinate` is capped at `AWAKE_LIMIT_SECONDS` (12h). A menu bar indicator would be the real fix; it needs an `NSStatusItem` and so a process that stays alive, which is not something to introduce untested. |
 
 ## How to run things

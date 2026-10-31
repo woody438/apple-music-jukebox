@@ -9,3 +9,6 @@ node_modules/
 # Publishing-only build output; regenerate with `node demo/build.js`.
 demo/artifact.html
 data/jukebox.log
+
+# per-machine settings
+jukebox.conf

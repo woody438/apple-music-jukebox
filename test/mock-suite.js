@@ -11,6 +11,7 @@ const { spawn } = require('child_process');
 
 const { Engine } = require('../lib/engine');
 const { createMockMusic } = require('../lib/mock-music');
+const { pickLanAddress, lanCandidates, isPrivateIPv4 } = require('../lib/net');
 
 const VERBOSE = process.env.VERBOSE === '1';
 const qlog = VERBOSE ? (...a) => console.log('   ', ...a) : () => {};
@@ -554,6 +555,42 @@ test('a crowd of phones asking for artwork costs one Music call, not one each', 
     child.kill('SIGKILL');
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
   }
+});
+
+// 18 -----------------------------------------------------------------------
+test('the QR code follows the default route, not the interface name', async () => {
+  // A Mac mini with two adapters advertised the wrong network and no phone
+  // could reach it. The old rule preferred en0 believing it was the Wi-Fi --
+  // true on a laptop, false on a mini, where en0 is usually Ethernet.
+  const mini = {
+    en0: [{ family: 'IPv4', internal: false, address: '10.77.0.5' }],      // Ethernet
+    en1: [{ family: 'IPv4', internal: false, address: '192.168.1.40' }],   // Wi-Fi
+    lo0: [{ family: 'IPv4', internal: true, address: '127.0.0.1' }],
+  };
+  assert.equal(pickLanAddress(lanCandidates(mini), 'en1'), '192.168.1.40',
+    'should follow the default route to Wi-Fi, not pick en0 by name');
+  assert.equal(pickLanAddress(lanCandidates(mini), 'en0'), '10.77.0.5',
+    'and to Ethernet when that is the default route');
+
+  // The laptop case must not regress.
+  assert.equal(pickLanAddress(lanCandidates({
+    en0: [{ family: 'IPv4', internal: false, address: '10.0.0.23' }],
+  }), 'en0'), '10.0.0.23');
+
+  // No routing information (not macOS, or route refused) still yields one.
+  assert.ok(pickLanAddress(lanCandidates(mini), null));
+
+  // A VPN tunnel must not outrank the real network.
+  assert.equal(pickLanAddress(lanCandidates({
+    utun3: [{ family: 'IPv4', internal: false, address: '10.9.9.9' }],
+    en1: [{ family: 'IPv4', internal: false, address: '192.168.1.40' }],
+  }), 'en1'), '192.168.1.40');
+
+  // Guests are never handed a public address.
+  assert.equal(lanCandidates({ en0: [{ family: 'IPv4', internal: false, address: '192.0.2.2' }] }).length, 0);
+  assert.ok(!isPrivateIPv4('192.0.2.2'));
+  assert.ok(isPrivateIPv4('172.16.4.4') && isPrivateIPv4('192.168.0.1') && isPrivateIPv4('10.1.2.3'));
+  assert.ok(pickLanAddress([], 'en0') === null, 'no addresses at all is not a crash');
 });
 
 // ---------------------------------------------------------------------------

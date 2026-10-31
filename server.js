@@ -12,6 +12,7 @@ const { URL } = require('url');
 
 const { Engine } = require('./lib/engine');
 const { createStore } = require('./lib/state');
+const { lanAddress, lanCandidates, primaryInterfaceName } = require('./lib/net');
 
 // ---------------------------------------------------------------------------
 // CONFIG -- the knobs worth turning on the night.
@@ -100,26 +101,6 @@ function cacheIndex(index) {
 function isLocalRequest(req) {
   const a = req.socket.remoteAddress || '';
   return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
-}
-
-function lanAddress() {
-  const ifaces = os.networkInterfaces();
-  const candidates = [];
-  for (const [name, addrs] of Object.entries(ifaces)) {
-    for (const a of addrs || []) {
-      if (a.family !== 'IPv4' || a.internal) continue;
-      const ip = a.address;
-      const priv =
-        /^192\.168\./.test(ip) ||
-        /^10\./.test(ip) ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
-      if (!priv) continue;
-      // en0 is the Mac's Wi-Fi; prefer it over VPN and bridge interfaces.
-      candidates.push({ ip, score: name === 'en0' ? 0 : name.startsWith('en') ? 1 : 2 });
-    }
-  }
-  candidates.sort((a, b) => a.score - b.score);
-  return candidates.length ? candidates[0].ip : null;
 }
 
 function guestUrl() {
@@ -398,9 +379,22 @@ async function main() {
 
   server.listen(CONFIG.port, CONFIG.host, () => {
     const guest = guestUrl();
+    const cands = lanCandidates(os.networkInterfaces());
+    const primary = primaryInterfaceName();
     log('');
     log(`  Jukebox on the laptop : http://localhost:${CONFIG.port}/`);
     log(`  Guests on their phones: ${guest || '(no LAN address found -- set PUBLIC_URL)'}`);
+    if (cands.length > 1 && !CONFIG.publicUrl) {
+      log('');
+      log(`  This Mac has ${cands.length} network addresses:`);
+      for (const c of cands) {
+        const mark = c.name === primary ? '  <- default route, chosen' : '';
+        log(`      ${c.name.padEnd(8)} ${c.ip}${mark}`);
+      }
+      log('  If guests cannot reach it, start with the other one:');
+      log(`      PUBLIC_URL="http://<address>:${CONFIG.port}/" ./start.command`);
+      log('      ...or put that line in jukebox.conf so the Dock app uses it too.');
+    }
     log('');
     log('  Full screen: control-command-F.  Host panel: control-option-H.');
     log('');
