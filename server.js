@@ -55,6 +55,8 @@ if (MOCK) {
     librarySize: Number(process.env.MOCK_LIBRARY) || 2000,
     trackSeconds: Number(process.env.MOCK_TRACK_SECONDS) || 8,
     appendPickedUp: process.env.MOCK_APPEND_PICKED_UP === '1',
+    writeLatencyMs: Number(process.env.MOCK_WRITE_LATENCY) || 5,
+    readLatencyMs: Number(process.env.MOCK_READ_LATENCY) || 0,
     autoplay: process.env.MOCK_AUTOPLAY !== '0',
     log,
   });
@@ -208,17 +210,35 @@ engine.on('change', (snap) => broadcast('state', snap));
 
 // ---- artwork ---------------------------------------------------------------
 let artworkFor = { pid: null, file: null, contentType: null, missing: false };
+let artworkInFlight = null;   // { pid, promise }
 
 async function ensureArtwork(pid) {
   if (!pid) return null;
   if (artworkFor.pid === pid) return artworkFor.missing ? null : artworkFor;
-  fs.mkdirSync(ARTWORK_DIR, { recursive: true });
+
+  // Every phone asks for artwork the moment the track changes. Without this,
+  // each one starts its own osascript, they queue up on the write mutex, and
+  // the engine's poll loop -- which stands aside for writes -- goes blind for
+  // as long as it takes to drain them. Twenty phones would cost seconds at
+  // every track change, which is exactly when the handoff needs to see.
+  if (artworkInFlight && artworkInFlight.pid === pid) return artworkInFlight.promise;
+
   const file = path.join(ARTWORK_DIR, 'current.img');
-  const got = await music.artwork(file);
-  artworkFor = got
-    ? { pid, file: got.path, contentType: got.contentType, missing: false }
-    : { pid, file: null, contentType: null, missing: true };
-  return got ? artworkFor : null;
+  const promise = (async () => {
+    fs.mkdirSync(ARTWORK_DIR, { recursive: true });
+    const got = await music.artwork(file);
+    artworkFor = got
+      ? { pid, file: got.path, contentType: got.contentType, missing: false }
+      : { pid, file: null, contentType: null, missing: true };
+    return got ? artworkFor : null;
+  })();
+
+  artworkInFlight = { pid, promise };
+  try {
+    return await promise;
+  } finally {
+    if (artworkInFlight && artworkInFlight.pid === pid) artworkInFlight = null;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -67,17 +67,23 @@ changing anything:
   for exactly this reason — every decision is made on the track's persistent
   ID. Keep it that way.
 - Indexing 13,375 tracks takes about **1 second**.
-- **A track does not always stop where its `duration` says.** In a real
-  rehearsal an Autoplay song ended with 3.08s of nominal duration still to
-  run. The 0.6s handoff therefore never fired, and the missed-handoff rule
-  recovered instead: it saw a new track start while a pick was waiting and
-  took the room back within one poll. Audible result: the Autoplay song
-  finished properly, a fraction of a second of the next one may leak, then
-  the pick plays. Correct, but not the clean path.
-  `node tools/check-timing.js` measures whether the cause is the track's
-  `finish` point (Music stops there, not at `duration`) or osascript latency
-  eating the 0.6s window. Fix the cause before widening HANDOFF_SEC —
-  widening it clips more audible tail from every song.
+- **A state read costs about 316ms** (measured, `tools/check-timing.js`), and
+  the position it reports is stale by that whole round trip. Tracks are NOT
+  trimmed: 0 of 13,375 had a finish point before their duration, so early
+  endings are not the explanation for anything.
+- **This is why the handoff is booked, not watched for.** 200ms timer plus a
+  316ms read is a ~516ms effective poll period, against a 600ms window —
+  84ms of slack. Any jitter steps straight over the window: 1.1s left, then
+  already ended. A real rehearsal did exactly that and fell back on the
+  recovery path. So `_armHandoff` sets a timer for the moment the handoff is
+  due and plays the pick WITHOUT another read; the poll check and the
+  recovery rule remain underneath it as fallbacks.
+  Two traps, both of which this has already fallen into:
+  the timer must NOT be cancelled at the top of each tick (that leaves the
+  engine blind for the whole read, and the handoff lands in the hole), and a
+  test for this must be run with the fix removed to prove it fails — at 300ms
+  latency it passes either way and proves nothing. Test 15 uses 700ms because
+  that is where the difference decides the outcome.
 - Artist names really do start with `&` and `'` (`&ME, Black Coffee,
   Keinemusik`; `'Little' Louie Vega & Mark Anthony`). They bucket under `#`
   on the A-Z rail, which is correct. Nothing is ever addressed by name — only

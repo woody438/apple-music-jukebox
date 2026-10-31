@@ -372,6 +372,36 @@ test('the index drops non-songs, unchecked tracks and unavailable cloud tracks',
 });
 
 // 15 -----------------------------------------------------------------------
+test('the handoff survives a slow osascript read instead of falling back', async () => {
+  // A healthy Mac answers a state read in ~300ms; a Mac busy streaming to a
+  // party while twenty phones hit the server is slower. The position it
+  // reports is stale by that whole round trip, so uncorrected the engine
+  // believes it has more time than it has, fires after the track has already
+  // ended, and lands on the recovery path -- a fraction of a second of the
+  // wrong song, on every single track.
+  //
+  // 700ms is chosen because it is where the difference decides the outcome:
+  // without the correction this test fails with reason "recovered".
+  const rig = await makeRig({ trackSeconds: 16, readLatencyMs: 700 });
+  try {
+    await rig.engine.pick({ pid: rig.pids[0], deviceId: 'd1' });
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[0], { label: 'first pick playing' });
+    await rig.engine.pick({ pid: rig.pids[1], deviceId: 'd1' });
+
+    rig.music._sim.leaveSecondsLeft(3.5);
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[1], { label: 'second pick to take over' });
+
+    const how = rig.engine.lastStart;
+    assert.equal(how.reason, 'handoff',
+      `expected the clean handoff, got "${how.reason}" -- the read latency correction is not working`);
+    assert.ok(how.remaining !== null && how.remaining <= 0.6 + 0.01,
+      `fired at ${how.remaining}s remaining, outside the handoff window`);
+    assert.equal(rig.music._sim.player.isAutoplay, false, 'Autoplay never got in');
+  } finally { rig.stop(); }
+});
+
+// 16 -----------------------------------------------------------------------
+
 test('host endpoints answer the laptop and refuse everything else', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'jukebox-test-'));
   const port = 8599;
@@ -426,6 +456,58 @@ test('host endpoints answer the laptop and refuse everything else', async () => 
       assert.equal(pickRes.status, 200, 'guests can pick');
       assert.ok((await pickRes.json()).ok);
     }
+  } finally {
+    child.kill('SIGKILL');
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
+  }
+});
+
+// 17 -----------------------------------------------------------------------
+test('a crowd of phones asking for artwork costs one Music call, not one each', async () => {
+  // Artwork rides the write mutex, and the poll loop stands aside for writes.
+  // Without an in-flight guard, every phone that sees a new track starts its
+  // own osascript; they queue, and the engine goes blind for as long as it
+  // takes to drain them -- at exactly the moment the handoff needs to see.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'jukebox-art-'));
+  const port = 8601;
+  const WRITE_MS = 200;
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
+    env: Object.assign({}, process.env, {
+      MOCK: '1', PORT: String(port), JUKEBOX_DATA_DIR: tmp,
+      MOCK_LIBRARY: '200', MOCK_WRITE_LATENCY: String(WRITE_MS),
+    }),
+    stdio: VERBOSE ? 'inherit' : 'ignore',
+  });
+
+  try {
+    await waitFor(async () => {
+      const r = await fetch(`http://127.0.0.1:${port}/api/config`).catch(() => null);
+      return r && r.ok;
+    }, { label: 'the server to come up', timeout: 20000 });
+
+    // Get something playing, so there is a track to fetch artwork for.
+    const ix = await (await fetch(`http://127.0.0.1:${port}/api/index`)).json();
+    await fetch(`http://127.0.0.1:${port}/api/pick`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pid: ix.rows[0][0], deviceId: 'phone-0' }),
+    });
+    await waitFor(async () => {
+      const s = await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();
+      return !!(s.nowPlaying && s.nowPlaying.pid === ix.rows[0][0]);
+    }, { label: 'the pick to be playing' });
+
+    const PHONES = 12;
+    const t0 = Date.now();
+    await Promise.all(Array.from({ length: PHONES }, () =>
+      fetch(`http://127.0.0.1:${port}/api/artwork`).then((r) => r.status)));
+    const elapsed = Date.now() - t0;
+
+    // Serialised, twelve phones would cost twelve round trips through the
+    // mutex. Deduped, they share one.
+    assert.ok(elapsed < WRITE_MS * 4,
+      `${PHONES} concurrent artwork requests took ${elapsed}ms; ` +
+      `one call is ~${WRITE_MS}ms, twelve would be ~${WRITE_MS * PHONES}ms`);
   } finally {
     child.kill('SIGKILL');
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
