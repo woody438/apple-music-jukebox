@@ -99,6 +99,20 @@ trip; AppleScript has the saner syntax for mutation. The library index is a
 Apple Event per column. Fetching per track would take minutes on a large
 library.
 
+**The mock samples the player BEFORE its simulated latency, never after.** A
+real osascript reads the player near the start of its run and hands that
+reading back ~300ms later, so what arrives describes the past -- including
+which track was playing. Sleeping and then sampling is easier and is a lie:
+it hid a real bug (a read in flight across a handoff wiping the pick's name,
+so the song played out labelled AUTOPLAY) until a party rehearsal found it.
+`PICK_SETTLE_MS` and the `readStartedAtMs` check in `_tickOnce` are what
+make the engine ignore a reading older than the action it is judging.
+
+A regression test for that race needs the poll loop to have settled into its
+rhythm first: firing the handoff immediately after a pick lands on the wrong
+side of the cycle and the race never happens. Test 17 sleeps 250ms first,
+and fails 3 times out of 3 with the fix removed.
+
 Enum values come back from JXA **raw** and are normalised in Node. That is
 deliberate: it keeps every exclusion rule unit-testable without a Mac.
 

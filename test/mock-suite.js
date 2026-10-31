@@ -463,6 +463,48 @@ test('host endpoints answer the laptop and refuse everything else', async () => 
 });
 
 // 17 -----------------------------------------------------------------------
+test('a pick keeps its picked-by name when a stale read lands on the handoff', async () => {
+  // A read takes ~300ms. One already in flight when the handoff fires still
+  // reports the PREVIOUS track, and taking that at face value wipes
+  // nowPlaying -- so the song plays out shown as AUTOPLAY with nobody's name
+  // on it. At a party that is the entire point of the feature, gone.
+  const rig = await makeRig({ trackSeconds: 14, readLatencyMs: 400 });
+  try {
+    await rig.engine.pick({ pid: rig.pids[0], deviceId: 'd1', pickedBy: 'Ana' });
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[0], { label: 'first pick playing' });
+    await rig.engine.pick({ pid: rig.pids[1], deviceId: 'd2', pickedBy: 'Bo' });
+
+    // Let the poll loop settle into its rhythm first. The race needs a read
+    // to be IN FLIGHT when the handoff timer fires, and firing immediately
+    // after the pick lands on the wrong side of that rhythm.
+    await sleep(250);
+    rig.music._sim.leaveSecondsLeft(2.5);
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[1], { label: 'the handoff' });
+
+    // Give any in-flight read time to land and do its damage.
+    //
+    // Checked on EVERY sample, not only once the snapshot catches up to the
+    // new track id: a stale read reports the OLD track for a moment after
+    // the handoff, and an earlier version of this test skipped exactly those
+    // samples -- which is precisely the window where the name is lost.
+    const deadline = Date.now() + 2500;
+    while (Date.now() < deadline) {
+      const np = rig.engine.snapshot().nowPlaying;
+      assert.ok(np, 'nothing playing at all after the handoff');
+      assert.equal(np.isPick, true, 'the pick was reported as Autoplay');
+      assert.equal(np.pickedBy, 'Bo', 'the picked-by name was lost');
+      await sleep(100);
+    }
+
+    const final = rig.engine.snapshot();
+    assert.equal(final.nowPlaying.pid, rig.pids[1]);
+    assert.equal(final.nowPlaying.isPick, true, 'still a pick once everything settled');
+    assert.equal(final.nowPlaying.pickedBy, 'Bo');
+  } finally { rig.stop(); }
+});
+
+// 18 -----------------------------------------------------------------------
+
 test('a crowd of phones asking for artwork costs one Music call, not one each', async () => {
   // Artwork rides the write mutex, and the poll loop stands aside for writes.
   // Without an in-flight guard, every phone that sees a new track starts its

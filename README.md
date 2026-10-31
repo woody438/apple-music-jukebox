@@ -97,8 +97,26 @@ Work down this list. The first four are the ones that actually ruin parties.
 
 ### The Dock app
 
-`Jukebox.app` sits in the repo. Drag it to the Dock once (then right-click it
-there and pick **Options → Keep in Dock**).
+**You already have it** — it came down with the clone. There is nothing to
+download and nothing to install.
+
+Open the folder in Finder:
+
+```bash
+open ~/Developer/apple-music-jukebox
+```
+
+Drag **Jukebox.app** onto the Dock, then right-click it there and pick
+**Options → Keep in Dock**.
+
+Or let the Mac do it for you:
+
+```bash
+defaults write com.apple.dock persistent-apps -array-add "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>$HOME/Developer/apple-music-jukebox/Jukebox.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>" && killall Dock
+```
+
+If Finder shows it as a plain folder instead of an app, it just has not
+noticed yet — `touch ~/Developer/apple-music-jukebox/Jukebox.app` and it will.
 
 - **Double-click: starts.** It opens Music if it isn't open, starts the
   server, stops the Mac sleeping, and opens the jukebox in your browser.
