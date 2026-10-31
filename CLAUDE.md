@@ -48,6 +48,7 @@ test/mock-suite.js   engine tests, no Mac needed
 test/ui-suite.js     browser tests, optional, needs Playwright
 test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
+tools/check-timing.js  read-only: state-read latency, and duration vs finish
 demo/                self-contained UI demo: build.js welds the real markup,
                      stylesheet and fonts to an in-page simulator (demo-app.js)
                      plus a 338-track demo library. Proves nothing about Music.
@@ -66,6 +67,17 @@ changing anything:
   for exactly this reason — every decision is made on the track's persistent
   ID. Keep it that way.
 - Indexing 13,375 tracks takes about **1 second**.
+- **A track does not always stop where its `duration` says.** In a real
+  rehearsal an Autoplay song ended with 3.08s of nominal duration still to
+  run. The 0.6s handoff therefore never fired, and the missed-handoff rule
+  recovered instead: it saw a new track start while a pick was waiting and
+  took the room back within one poll. Audible result: the Autoplay song
+  finished properly, a fraction of a second of the next one may leak, then
+  the pick plays. Correct, but not the clean path.
+  `node tools/check-timing.js` measures whether the cause is the track's
+  `finish` point (Music stops there, not at `duration`) or osascript latency
+  eating the 0.6s window. Fix the cause before widening HANDOFF_SEC —
+  widening it clips more audible tail from every song.
 - Artist names really do start with `&` and `'` (`&ME, Black Coffee,
   Keinemusik`; `'Little' Louie Vega & Mark Anthony`). They bucket under `#`
   on the A-Z rail, which is correct. Nothing is ever addressed by name — only
