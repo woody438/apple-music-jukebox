@@ -17,8 +17,7 @@ chmod 755 "$APP/Contents/MacOS/node"
 
 rm -rf "$CODE"
 mkdir -p "$CODE"
-# Only what the server needs at run time. Not tests, demo, tools, data, or
-# the git install's launchers.
+# Only what the server needs at run time. Not tests, demo, tools or data.
 APP="$(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"     # absolute: we cd next
 CODE="$APP/Contents/Resources/jukebox"
 cd "$ROOT"                    # globs relative to the repo, so a path with spaces is safe

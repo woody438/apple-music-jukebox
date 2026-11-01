@@ -9,10 +9,14 @@ The laptop shows the cabinet full-screen; guests pick from their phones on the
 same Wi-Fi. Picks play first come, first served. When picks run out, Music's
 own Autoplay keeps the room going.
 
-**Zero npm runtime dependencies. No build step. Nothing fetched at run time.**
-Fonts are base64 in `public/fonts.css`; the QR library is vendored. If you are
-tempted to add a dependency, don't — the party Wi-Fi gets no say in whether
-the jukebox boots.
+**Zero npm runtime dependencies. No build step for the server. Nothing
+fetched at run time.** Fonts are base64 in `public/fonts.css`; the QR library
+is vendored. If you are tempted to add a dependency, don't — the party Wi-Fi
+gets no say in whether the jukebox boots.
+
+People get it as **Party Jukebox**, a Mac app (`app/`, see "The Mac app"
+below) that carries a pinned Node and this server. The app is built only by
+CI; merging to `main` releases it to every installed copy.
 
 ## Hard constraints — settled, do not relitigate
 
@@ -50,14 +54,11 @@ test/ui-suite.js     browser tests, optional, needs Playwright
 test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
 tools/check-timing.js  read-only: state-read latency, and duration vs finish
-Jukebox.app/         Dock launcher: double-click toggles the server on/off;
-                     also takes start | stop | menu, which the menu bar uses
-menubar/menubar.js   menu bar icon, JXA via osascript: draws, never decides
-menubar/helper.js    the menu bar's brain, plain Node: menu as JSON, actions
-test/menubar-suite.js  helper, fake-bridge JXA, launcher + Update.command with
-                     stubbed macOS tools; on a Mac also the real AppKit selftest
-Update.command       manual update: refuses while running, pulls, runs tests
-tools/add-to-dock.command  puts Jukebox.app on the Dock, optionally at a slot
+lib/conf.js          jukebox.conf read/write for the app's Settings window
+app/                 the Mac app, Swift (see "The Mac app")
+tools/app/           fetch the pinned Node, assemble, sign, make the certificate
+test/conf-suite.js   the Settings window's reading and writing of jukebox.conf
+test/network-suite.js  which address guests get, and changing it live
 test/genre-panel.js  browser tests for the genre settings panel
 demo/                self-contained UI demo: build.js welds the real markup,
                      stylesheet and fonts to an in-page simulator (demo-app.js)
@@ -249,8 +250,8 @@ Separate from the 90s `IDLE_RESET_MS`, which resets genre and search.
 
 All four live in `CONFIG` at the top of `server.js` but read from the
 environment (`JUKEBOX_MAX_PER_PHONE`, `_PER_LAPTOP`, `_MAX_QUEUE`,
-`_REPEAT_MINUTES`), so `jukebox.conf` can change them without a local edit
-that would block `Update.command`. `envNum` keeps `0` as a real value: a
+`_REPEAT_MINUTES`), so `jukebox.conf` -- and so the app's Settings window --
+can change them without touching code. `envNum` keeps `0` as a real value: a
 plain `|| dflt` would turn "no repeat window" back into 60 minutes.
 
 Host status is decided by `isLocalRequest`, i.e. the socket's address, not by
@@ -259,8 +260,8 @@ anything the client sends. So the laptop gets the laptop's allowance only at
 That is correct -- it is what stops a phone claiming host rights -- but it
 surprises the host, so the startup log says it.
 
-Both launchers read `jukebox.conf`. `start.command` did not until the Wi-Fi
-QR code was added, so anything set there used to work only from the Dock.
+The app sources `jukebox.conf` with `/bin/sh` (`set -a; . jukebox.conf`)
+before it execs node, so the file's shell quoting is the only quoting there is.
 
 ### Wi-Fi QR code
 
@@ -275,47 +276,12 @@ the jukebox one. Rules that keep it safe:
 - The client switches qrcode.js to its UTF-8 encoder. The default keeps only
   the low byte of each character and mangles an accented or emoji name.
 
-## The menu bar icon
-
-A ♪ in the menu bar: bright while running, greyed while stopped. Status, guest
-address, Open page, Start/Stop, Guest Network (which adapter the QR code
-uses), Check for Updates, Quit. The rules it was built on:
-
-- **menubar.js decides nothing.** It is JXA and cannot run off a Mac, so it
-  cannot be tested in CI. It asks `helper.js menu` for the menu as JSON on
-  every open (`menuNeedsUpdate:`), draws exactly that, and hands each click to
-  `helper.js do <action>` in the background. Change behaviour in the helper.
-  The only logic left in the JXA is the 3 s state tick (curl, not node, as it
-  runs all night) and Quit.
-- **Start and Stop go through Jukebox.app**, via `open -n -g Jukebox.app
-  --args start|stop`, never by spawning node. LaunchServices then launches it
-  exactly as a Dock click does, so the server's responsible process -- the
-  app TCC asks "may this control Music?" about -- is unchanged. Spawning node
-  from the menu bar would raise a fresh Automation prompt on party night.
-- **Explicit verbs, not the toggle.** `start` while running only opens the
-  page; `stop` while stopped does nothing. A click can never invert.
-- **The icon is found by its whole launch line**, `osascript -l JavaScript
-  .*menubar/menubar[.]js`, in both Jukebox.app and Update.command. A bare
-  `menubar/menubar.js` also matches an editor with the file open, and
-  Update.command pkills what it matches. (It killed the test harness's own
-  shell before it was tightened.)
-- **Guest address precedence** (`resolveGuestUrl`, lib/net.js): adapter
-  chosen in the menu (`data/network.json`, an interface name, not an IP) >
-  `PUBLIC_URL` > routing table. A chosen adapter with no address falls
-  through and sets `chosenMissing`; a dead address on the QR code is the
-  worst outcome. Read on every request, never cached. Changing it broadcasts
-  an SSE `config` event and the laptop redraws the QR code in place.
-- **Updates: check only.** `git fetch` and a count; installing is still
-  Update.command in a Terminal you can watch, offered only while stopped. A
-  stored "update available" goes stale the moment HEAD moves.
-- **It is optional.** Separate process, started in the background, never
-  waited on. If it fails the jukebox is exactly what it was.
-  `JUKEBOX_MENU_BAR=0` in jukebox.conf turns it off.
-
 ## The Mac app
 
 `app/` is a native Swift app (XcodeGen, `app/project.yml`) around the same
-`server.js`. It is what people download; the git install is being retired.
+`server.js`. It is what people download. The git install it replaced
+(Jukebox.app, Update.command, start.command and an osascript menu bar icon)
+was removed once the app was running on two Macs; it is in git history.
 
 ```
 app/Sources/AppDelegate.swift   Dock icon + menu bar note, the menu, quit
@@ -331,8 +297,8 @@ app/Checks/smoke.sh             launches the built app on CI, end to end
 ```
 
 **Releasing is merging.** Every push to `main` that touches more than docs
-builds on GitHub's macos-15 runner, runs the engine, menu bar and settings
-suites on the Node that ships, smoke-tests the built app, signs it with the
+builds on GitHub's macos-15 runner, runs the engine, settings and guest
+network suites on the Node that ships, smoke-tests the built app, signs it with the
 project certificate (repo secrets `SIGNING_CERT_P12` / `_PASSWORD`) and
 publishes it as the `latest` release. **Every installed copy is then offered
 it.** So nothing reaches `main` that has not been green on a pull request:
@@ -344,7 +310,10 @@ certificate as itself.
 Rules it was built on, each learned the hard way:
 
 - **Native, not a script.** A shell-script `CFBundleExecutable` is launched
-  under Rosetta on Apple Silicon (the git install's whole menu bar saga).
+  under Rosetta on Apple Silicon. The old git install's osascript menu bar
+  icon inherited that and spun at 100% CPU without ever drawing; `sample`
+  said `Code Type: X86-64 (translated)`. Two wrong guesses (nohup, the
+  inherited bundle id) were each ruled out on the Mac before that was found.
   The app's executable is arm64 Mach-O, and the bundled Node is arm64.
 - **Node is pinned** (`app/node.version`: version + SHA-256), never "latest
   LTS": a new runtime under the party changes when someone edits that file.
@@ -394,10 +363,10 @@ These are not negotiable. It is somebody's real music library.
 | Guest Wi-Fi client isolation | Phones load nothing | README checklist item 4 |
 | Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
 | `position` jitter from Music | Handoff fires slightly early or late | 250 ms margin in the missed-handoff test; handoff clips <1 s by design |
-| **Two network adapters.** A Mac mini has Ethernet and Wi-Fi; only one is the network the phones are on. | Guests get a QR code for an address they cannot reach | `lib/net.js` follows the routing table, never the interface name: en0 is Wi-Fi on a laptop but Ethernet on a mini, so the name means nothing. Startup prints every address found and marks the chosen one. `PUBLIC_URL` in `jukebox.conf` overrides, and the Dock app reads that file because it has no shell. |
-| **Nothing on screen says the jukebox is running.** The launcher is `LSUIElement` and the server is detached, so it is easy to leave up after the party. | A Mac kept awake all night | The menu bar icon (above). `caffeinate` is still capped at `AWAKE_LIMIT_SECONDS` (12h), because the icon can be quit. |
-| **The menu bar icon on a real Mac: partly proven.** On a MacBook Air (Apple Silicon): `node test/menubar-suite.js` 22/22 including the real-AppKit selftest; started from Terminal the icon appears, its menu opens and a click (Quit) works. Started by Jukebox.app it hung at "starting" at 100% CPU -- **Rosetta**: LaunchServices runs a shell-script app as Intel code and osascript inherited it (`sample` showed x86_64 addresses and libRosetta; nohup and `__CFBundleIdentifier` were each tested and ruled out). Fixed by `arch -arm64`; that fix itself is not yet confirmed on the Mac. Start/Stop via `open --args` and Guest Network on a two-adapter Mac are still untried. | No icon, or an icon whose menu does nothing | Isolated: the jukebox does not depend on it. `data/menubar.log` logs each startup step and the exit status. |
-| **Jukebox.app runs under Rosetta on Apple Silicon** (see above), so anything it starts from a universal binary is translated too. Homebrew's node is arm64-only and runs native, but the official Node `.pkg` (README's no-Homebrew route) is universal, so its server would run as Intel code under Rosetta. That works -- slower, and NOT what preflight measured (preflight runs from Terminal, native). | Second Macs set up without Homebrew | Not changed: the server path was left alone. `arch -arm64` on the node launch is the obvious fix, to be done deliberately and measured, not slipped in. |
+| **Two network adapters.** A Mac mini has Ethernet and Wi-Fi; only one is the network the phones are on. | Guests get a QR code for an address they cannot reach | `lib/net.js` follows the routing table, never the interface name: en0 is Wi-Fi on a laptop but Ethernet on a mini, so the name means nothing. Startup prints every address found and marks the one guests get. **Guest Network** in the app (menu or Settings) pins an adapter, which beats `PUBLIC_URL`; a pinned adapter with no address falls back rather than showing a dead one. Not yet confirmed on the two-adapter Mac mini. |
+| ~~Nothing on screen says the jukebox is running~~ **CLEARED** | — | The app is in the Dock and the menu bar, and keeps the Mac awake only while its server runs (a power assertion, not caffeinate); quitting it stops both. |
+| **The Mac app on real Macs: mostly proven.** MacBook Air (Apple Silicon, macOS 26): installed, Open Anyway once, allowed to control Music, indexed 12,751 of 13,375 tracks in 775 ms through the bundled Node; updated itself from build 4 to build 6 (signed, ask first) and the Settings window worked. Installed on the DJ mini, with the git install's settings imported. | An untried path fails first at a party | Untried: Guest Network on the two-adapter mini, a phone actually joining from the Wi-Fi code, and confirming the Music permission was not asked again after the update. |
+| ~~Jukebox.app ran under Rosetta~~ **CLEARED** | — | The app's executable and its bundled Node are arm64; nothing it starts is translated. |
 
 ## How to run things
 
@@ -409,15 +378,14 @@ ONLY=crossfade node test/mock-suite.js  # just the tests whose name matches
 MOCK=1 node server.js                   # simulator on :8484
 MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js   # with a QR
 node test/ui-suite.js /tmp/shots        # browser tests (needs Playwright)
-node test/menubar-suite.js             # menu bar: helper, fake-bridge JXA, launcher, updater (~10s)
 node test/conf-suite.js                # the Settings window's jukebox.conf reader/writer
-node menubar/helper.js view            # what the menu bar sees, as JSON (on the Mac)
+node test/network-suite.js             # guest address precedence, the live network route
 node test/party-rehearsal.js           # end-to-end against a running server
 node test/party-rehearsal.js --fast    # same, skipping through the queued picks
 
 node demo/build.js                      # rebuild demo/jukebox-demo.html after a UI change
 node preflight.js                       # against REAL Music, on the Mac
-./start.command                         # the party
+set -a; . ./jukebox.conf; set +a; node server.js   # a real party from a clone, no app
 ```
 
 Useful mock switches: `MOCK_LIBRARY` (track count), `MOCK_TRACK_SECONDS`,

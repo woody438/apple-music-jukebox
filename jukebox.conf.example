@@ -1,18 +1,20 @@
-# Copy to jukebox.conf for per-machine settings. Not tracked by git.
-#   cp jukebox.conf.example jukebox.conf
+# Party Jukebox settings.
 #
-# The Dock app reads this. It has no shell, so environment variables you set
-# in Terminal never reach it -- this file is the way in.
+# The Party Jukebox app keeps this file at
+#   ~/Library/Application Support/Party Jukebox/jukebox.conf
+# and its Settings window (the note in the menu bar > Settings...) reads and
+# writes it for you. You never need to edit it by hand -- but you can: it is
+# read by the shell when the jukebox starts, so anything the window does not
+# show can go here. Restart the jukebox after editing (menu > Restart Jukebox).
+#
+# Running from a clone instead of the app, put it in the repo root and run:
+#   set -a; . ./jukebox.conf; set +a; node server.js
 
 # A Mac with two network adapters may advertise the wrong one. The easy fix
-# is the menu bar icon: Guest Network -> pick the adapter. That choice wins
-# over this line and follows the adapter if its address changes.
-# To pin an exact address instead, check which one the phones can reach:
-#   for i in en0 en1 en2 en3 en4; do ip=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i = $ip"; done
+# is Guest Network in the menu (or Settings > Network): pick the adapter.
+# That choice wins over this line and follows the adapter if its address
+# changes. To pin an exact address instead:
 # PUBLIC_URL="http://192.168.1.40:8484/"
-
-# The menu bar icon (the note at the top of the screen). 0 turns it off.
-# JUKEBOX_MENU_BAR=1
 
 # The neon marquee text.
 # JUKEBOX_TITLE="JUKEBOX"

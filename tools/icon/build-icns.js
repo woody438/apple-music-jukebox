@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const OUT = path.join(__dirname, '..', '..', 'Jukebox.app', 'Contents', 'Resources', 'AppIcon.icns');
+const OUT = path.join(__dirname, '..', '..', 'app', 'Resources', 'AppIcon.icns');      // the Mac app's icon
 // OSType -> pixel size. Both the 1x and @2x slots macOS looks for.
 const SLOTS = [
   ['icp4', 16], ['icp5', 32], ['ic11', 32], ['ic12', 64],
