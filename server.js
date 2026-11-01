@@ -60,7 +60,9 @@ const MOCK = process.env.MOCK === '1';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = process.env.JUKEBOX_DATA_DIR || path.join(ROOT, 'data');
-const ARTWORK_DIR = path.join(PUBLIC_DIR, 'artwork-cache');
+// Configurable because the Mac app runs this code from inside its own bundle,
+// which is read-only -- and writing there would break the app's signature.
+const ARTWORK_DIR = process.env.JUKEBOX_ARTWORK_DIR || path.join(PUBLIC_DIR, 'artwork-cache');
 const NETWORK_FILE = path.join(DATA_DIR, 'network.json');   // the menu bar's adapter choice
 
 function log(...args) {

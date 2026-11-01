@@ -1,0 +1,162 @@
+# Builds the Party Jukebox Mac app on GitHub's Mac runners, tests it on
+# real macOS, and publishes it as the "latest" release, which is where the
+# app's updater looks:
+#   https://github.com/woody438/apple-music-jukebox/releases/latest
+# Pull requests build and test too; their app is published as the "preview"
+# pre-release (Get Preview Builds, in the app's menu, follows it) and kept
+# on the run as an artifact. The latest release is only built from main.
+# (Modelled on busy-bar-sign's build.)
+name: Build Mac app
+
+on:
+  push:
+    branches: [main]
+    # every build on main reaches everyone through the updater: words alone don't make one
+    paths-ignore: ['**.md', 'demo/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # to publish the release
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERT_P12 != '' }}
+      BUILD_NUMBER: ${{ github.run_number }}
+      UPDATE_CHANNEL: ${{ github.event_name == 'pull_request' && 'preview' || 'latest' }}
+      PREVIEW_PR: ${{ github.event.pull_request.number }}
+      APP: build/Build/Products/Release/Party Jukebox.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version && uname -m
+
+      # The exact Node the app carries, checksum-verified. The tests below run
+      # on it too: what is tested is what ships.
+      - name: Fetch the pinned Node
+        run: |
+          tools/app/fetch-node.sh "$RUNNER_TEMP/node/node"
+          echo "$RUNNER_TEMP/node" >> "$GITHUB_PATH"
+
+      - name: Engine tests, on the shipped Node
+        run: node test/mock-suite.js
+
+      - name: Menu bar tests (the git install's), on the shipped Node
+        run: node test/menubar-suite.js
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          cd app && xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project app/PartyJukebox.xcodeproj -scheme PartyJukebox \
+            -configuration Release -derivedDataPath build \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" UPDATE_CHANNEL="$UPDATE_CHANNEL" PREVIEW_PR="$PREVIEW_PR" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: .*app/Sources/|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log                  # a failed build can still leave a partial app
+          test -d "$APP"
+
+      - name: Put Node and the jukebox in the app
+        run: tools/app/assemble-app.sh "$APP" "$RUNNER_TEMP/node/node"
+
+      # Signed with the project's certificate, macOS knows each build as the
+      # same app, so "control Music" carries over and the updater can check a
+      # download; ad hoc, each build looks new and cannot update itself.
+      - name: Sign with the project's certificate
+        if: env.HAS_SIGNING_CERT == 'true'
+        env:
+          SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          echo "$SIGNING_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          tools/app/sign.sh "$APP" "$RUNNER_TEMP/cert.p12" "$SIGNING_CERT_PASSWORD"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Sign ad hoc (no certificate yet), and prove certificate signing works on a copy
+        if: env.HAS_SIGNING_CERT != 'true'
+        run: |
+          PASS=$(tools/app/make-signing-cert.sh "$RUNNER_TEMP/test.p12")
+          ditto "$APP" "$RUNNER_TEMP/Test.app"
+          tools/app/sign.sh "$RUNNER_TEMP/Test.app" "$RUNNER_TEMP/test.p12" "$PASS"
+          tools/app/sign.sh "$APP" -
+          echo "::notice::Signed ad hoc: add SIGNING_CERT_P12 and SIGNING_CERT_PASSWORD (tools/app/make-signing-cert.sh) so the Music permission survives updates and the app can update itself"
+
+      - name: Smoke test the built app
+        run: app/Checks/smoke.sh "$APP"
+
+      - name: Package
+        run: |
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d -r- "$APP" 2>&1 | grep designated                    # what macOS knows this build by
+          lipo -info "$APP/Contents/MacOS/Party Jukebox" | grep -q arm64
+          lipo -info "$APP/Contents/MacOS/node" | grep -q arm64
+          test -f "$APP/Contents/Resources/AppIcon.icns"
+          test -f "$APP/Contents/Resources/jukebox/server.js"
+          test "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" = "$BUILD_NUMBER"
+          test "$(plutil -extract PJUpdateChannel raw "$APP/Contents/Info.plist")" = "$UPDATE_CHANNEL"
+          plutil -extract NSAppleEventsUsageDescription raw "$APP/Contents/Info.plist"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" PartyJukebox.zip
+          ls -l PartyJukebox.zip
+          # what the updater reads (app/Sources/UpdateCheck.swift)
+          cat > PartyJukebox.json <<EOF
+          {"build": $BUILD_NUMBER, "version": "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")", "commit": "$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)", "channel": "$UPDATE_CHANNEL"}
+          EOF
+          cat PartyJukebox.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PartyJukebox
+          path: |
+            PartyJukebox.zip
+            PartyJukebox.json
+
+      - name: Publish as the latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest PartyJukebox.zip PartyJukebox.json \
+            --target "$GITHUB_SHA" \
+            --title "Party Jukebox — latest build" \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}.
+
+          **Install:** download PartyJukebox.zip, double-click to unzip, drag **Party Jukebox** to Applications.
+
+          **First open:** the app isn't notarised by Apple, so macOS blocks it the first time. Try to open it, then go to System Settings ▸ Privacy & Security, scroll down and click **Open Anyway**. When it first plays, allow it to control Music.
+
+          Needs a Mac with Apple silicon and macOS 14 or later."
+
+      - name: Publish a pull request's build as the preview release
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete preview --yes --cleanup-tag || true
+          gh release create preview PartyJukebox.zip PartyJukebox.json --prerelease \
+            --target "${{ github.event.pull_request.head.sha }}" \
+            --title "Party Jukebox — preview (PR #${{ github.event.pull_request.number }})" \
+            --notes "Built from pull request #${{ github.event.pull_request.number }} (\`${{ github.head_ref }}\`) at ${{ github.event.pull_request.head.sha }}. For testing; the latest release is still the one built from main.
+
+          **Install:** download PartyJukebox.zip, unzip, drag **Party Jukebox** to Applications, then Open Anyway (System Settings ▸ Privacy & Security) the first time."
+
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
