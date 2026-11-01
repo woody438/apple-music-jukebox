@@ -79,9 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Quitting stops the jukebox first -- cleanly, so the queue is on disk --
     /// and only then lets the app go. Music keeps playing.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        NSLog("Party Jukebox: quit requested (server ours: \(server.ours), state: \(Self.word(server.state)))")
         guard server.ours, !quitting else { return .terminateNow }
         quitting = true
-        server.stop { NSApp.reply(toApplicationShouldTerminate: true) }
+        server.stop {
+            NSLog("Party Jukebox: server stopped; quitting")
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
         return .terminateLater
     }
 
@@ -90,7 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func catchSigterm() {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { NSApp.terminate(nil) }
+        source.setEventHandler {
+            NSLog("Party Jukebox: SIGTERM")
+            NSApp.terminate(nil)
+        }
         source.resume()
         signalSource = source
     }

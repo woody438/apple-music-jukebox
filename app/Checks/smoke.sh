@@ -14,18 +14,26 @@ APP="$1"
 PORT=8599
 BIN="$APP/Contents/MacOS/Party Jukebox"
 SUPPORT="$HOME/Library/Application Support/Party Jukebox"
-fail() { echo "SMOKE FAIL: $*" >&2; [ -f "$SUPPORT/data/jukebox.log" ] && tail -40 "$SUPPORT/data/jukebox.log" >&2; exit 1; }
+APPLOG="${RUNNER_TEMP:-/tmp}/party-jukebox-app.log"
+fail() {
+  echo "SMOKE FAIL: $*" >&2
+  echo "--- the app's own log:" >&2; [ -f "$APPLOG" ] && tail -40 "$APPLOG" >&2
+  echo "--- the server's log:" >&2; [ -f "$SUPPORT/data/jukebox.log" ] && tail -20 "$SUPPORT/data/jukebox.log" >&2
+  exit 1
+}
+# Gone, or a zombie nobody has collected yet: either way it has exited.
+alive() { local st; st=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' '); [ -n "$st" ] && [ "${st#Z}" = "$st" ]; }
 pass() { echo "PASS  $*"; }
 
 lsof -ti "tcp:$PORT" -sTCP:LISTEN >/dev/null 2>&1 && fail "port $PORT busy before the test"
 
-"$BIN" --mock --port "$PORT" --no-updates &
+"$BIN" --mock --port "$PORT" --no-updates >"$APPLOG" 2>&1 &
 APP_PID=$!
 trap 'kill -9 $APP_PID 2>/dev/null || true' EXIT
 
 for _ in $(seq 1 60); do
   curl -fsS "http://127.0.0.1:$PORT/api/config" >/dev/null 2>&1 && break
-  kill -0 "$APP_PID" 2>/dev/null || fail "the app exited before the server came up"
+  alive "$APP_PID" || fail "the app exited before the server came up"
   sleep 0.5
 done
 CFG=$(curl -fsS "http://127.0.0.1:$PORT/api/config") || fail "the server never answered"
@@ -57,13 +65,14 @@ codesign --verify --strict "$APP" || fail "the bundle's signature broke while it
 pass "data in Application Support; the bundle untouched and still validly signed"
 
 kill -TERM "$APP_PID"
-for _ in $(seq 1 30); do
-  kill -0 "$APP_PID" 2>/dev/null || break
+for _ in $(seq 1 40); do
+  alive "$APP_PID" || break
   sleep 0.25
 done
-kill -0 "$APP_PID" 2>/dev/null && fail "the app did not quit on SIGTERM"
+alive "$APP_PID" && fail "the app did not quit within 10 s of SIGTERM"
+wait "$APP_PID" 2>/dev/null || true
 sleep 0.5
-kill -0 "$NODE_PID" 2>/dev/null && fail "the server was left running after the app quit"
+alive "$NODE_PID" && fail "the server was left running after the app quit"
 lsof -ti "tcp:$PORT" -sTCP:LISTEN >/dev/null 2>&1 && fail "something still holds port $PORT"
 trap - EXIT
 pass "SIGTERM quits the app and the server goes with it"

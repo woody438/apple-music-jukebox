@@ -169,6 +169,7 @@ final class ServerController {
     }
 
     private func exited(status: Int32, signalled: Bool) {
+        NSLog("Party Jukebox: server exited (status \(status)\(signalled ? ", signal" : ""))")
         process = nil
         if let awake { ProcessInfo.processInfo.endActivity(awake) }
         awake = nil
@@ -197,6 +198,7 @@ final class ServerController {
             if let done { stopWaiters.append(done) }
             guard state != .stopping else { return }
             state = .stopping
+            NSLog("Party Jukebox: stopping the server (pid \(p.processIdentifier))")
             p.terminate()                                    // SIGTERM: server.js shuts down cleanly
             let pid = p.processIdentifier
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
