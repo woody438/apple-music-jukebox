@@ -199,16 +199,65 @@ which is worse at a party.
 
 If it ever refuses to start, the reason is in `data/jukebox.log`.
 
-**It leaves nothing on screen while it runs**, so it caps how long it keeps
-the Mac awake at 12 hours — long enough to outlast any party, short enough
-that a jukebox forgotten overnight does not flatten the battery. Override
-with `AWAKE_LIMIT_SECONDS` if you need to.
+It still caps how long it keeps the Mac awake at 12 hours — long enough to
+outlast any party, short enough that a jukebox forgotten overnight does not
+flatten the battery. Override with `AWAKE_LIMIT_SECONDS` if you need to.
+
+### The menu bar icon
+
+Starting the jukebox also puts a **♪ note icon in the menu bar** at the top of
+the screen. It's how you tell at a glance whether the jukebox is on:
+
+- **bright** — running
+- **greyed out** — stopped
+- **♪ …** — starting up
+
+Click it for:
+
+| Item | Does |
+|---|---|
+| **Jukebox is running / stopped**, **Guests: …** | What's happening, and the exact address on the QR code |
+| **Open Jukebox Page** | Opens `http://localhost:8484/` — always localhost, so you get the host controls |
+| **Start Jukebox** / **Stop Jukebox** | The same as double-clicking the Dock icon, but it never toggles the wrong way. Stop still leaves Music playing |
+| **Guest Network** | Which network adapter the QR code points at. **Automatic** follows the routing table (or `PUBLIC_URL` in `jukebox.conf`, if you set one). Pick an adapter — *Wi-Fi (en1) — 192.168.1.40* — and the QR code on the cabinet changes there and then, no restart. The choice sticks, and follows the adapter if its address changes |
+| **Check for Updates…** | Looks on GitHub and tells you (a notification, then the menu) whether there is anything new. It only *looks* — nothing changes until you choose **Install Update**, which opens `Update.command`. That is only offered while the jukebox is stopped |
+| **Quit Menu Bar Icon** | Hides the icon. Does not stop the jukebox |
+
+The icon stays after you stop the jukebox, so you can start it again from
+there. If you quit it, the next double-click on the Dock icon brings it back
+— but that click also starts or stops the jukebox, as it always has. To get
+just the icon back, leaving the jukebox alone:
+
+```bash
+open -g -n ~/Developer/apple-music-jukebox/Jukebox.app --args menu
+```
+
+**It is a separate background process**, so if it ever fails to appear the
+jukebox works exactly as it did before it existed — Dock icon and all.
+Anything it has to say is in `data/menubar.log`. To turn it off for good, put
+`JUKEBOX_MENU_BAR=0` in `jukebox.conf`.
+
+**First time on a Mac, check it works** (about ten seconds, and it changes
+nothing):
+
+```bash
+cd ~/Developer/apple-music-jukebox && node test/menubar-suite.js
+```
+
+The last test runs the icon against the real macOS menu bar and prints
+PASS/FAIL per step. In Activity Monitor the icon shows up as `osascript`.
+
+On a MacBook with a notch, a crowded menu bar can hide icons behind the
+notch. If you can't see the note, quit something else that lives up there.
 
 ### Updating
 
-Double-click **`Update.command`**. It refuses to run while the jukebox is up,
-pulls the latest, and then runs the engine tests so you see green before you
-trust it. If the tests fail it tells you how to go back.
+Double-click **`Update.command`** — or from the menu bar, **Check for
+Updates…** then **Install Update**, which opens the same thing. It refuses to
+run while the jukebox is up, pulls the latest, and then runs the engine tests
+so you see green before you trust it. If the tests fail it tells you how to go
+back. When it succeeds it restarts the menu bar icon, so the menu is on the
+new version too.
 
 There is **no automatic updater**, on purpose. An updater exists to change the
 code, and on the one night this matters that is risk with no upside. Update
@@ -376,7 +425,8 @@ up but nothing starts until you press play again.
 | Preflight fails at "control Music" | The automation permission was never granted | System Settings → Privacy & Security → Automation → your Terminal → tick **Music**, then run preflight again |
 | Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output. (Passed 17/17 on macOS 25.6 / Node 26.8 over a 13,375-track library.) |
 | Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the URL on your own phone first |
-| The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox advertised the wrong one | See below — pin the right one in `jukebox.conf` |
+| The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox advertised the wrong one | Menu bar icon → **Guest Network** → pick the other adapter. See below |
+| No note icon in the menu bar | It failed to start, it was quit, or it's hidden behind the notch | `open -g -n ~/Developer/apple-music-jukebox/Jukebox.app --args menu` brings it back without touching the jukebox. If it still isn't there, look in `data/menubar.log` and run `node test/menubar-suite.js` |
 | Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
 | Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
 | A second of a different song between two picks | Music moved on before the jukebox did | The log line for that pick will say `RECOVERED`. With crossfade on, look for `Music is leaving tracks Ns early` — once that line appears it should stop. If it keeps happening, send me the log |
@@ -396,9 +446,19 @@ A Mac with both Ethernet and Wi-Fi has two addresses, and only one of them is
 on the network the phones are using. The jukebox follows the routing table —
 the adapter the Mac actually sends traffic out of — and prints every address
 it found at startup, marking the one it chose. If that's the wrong one, don't
-unplug anything; just pin the right one.
+unplug anything; just pick the right one.
 
-Find the addresses:
+**The easy way: the menu bar icon.** Click the note, look under **Guest
+Network**, and pick the adapter the phones are on — *Wi-Fi* or *Ethernet*,
+each with its address. The QR code on the cabinet changes straight away,
+nothing restarts, and the choice is remembered on that Mac. **Automatic**
+puts it back.
+
+A choice made there beats `PUBLIC_URL` in `jukebox.conf`. If the chosen
+adapter loses its address (cable out, Wi-Fi off), the jukebox falls back to
+automatic rather than showing a dead address, and the menu says so.
+
+**The old way, pinning an exact address** — still works. Find the addresses:
 
 ```bash
 for i in en0 en1 en2 en3 en4; do ip=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i = $ip"; done

@@ -4,10 +4,15 @@
 # The Dock app reads this. It has no shell, so environment variables you set
 # in Terminal never reach it -- this file is the way in.
 
-# A Mac with two network adapters may advertise the wrong one. Check which
-# address the phones can actually reach, then pin it here:
+# A Mac with two network adapters may advertise the wrong one. The easy fix
+# is the menu bar icon: Guest Network -> pick the adapter. That choice wins
+# over this line and follows the adapter if its address changes.
+# To pin an exact address instead, check which one the phones can reach:
 #   for i in en0 en1 en2 en3 en4; do ip=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i = $ip"; done
 # PUBLIC_URL="http://192.168.1.40:8484/"
+
+# The menu bar icon (the note at the top of the screen). 0 turns it off.
+# JUKEBOX_MENU_BAR=1
 
 # The neon marquee text.
 # JUKEBOX_TITLE="JUKEBOX"

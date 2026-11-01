@@ -50,7 +50,12 @@ test/ui-suite.js     browser tests, optional, needs Playwright
 test/party-rehearsal.js  end-to-end against a RUNNING server (mock or real)
 tools/build-fonts.js regenerates public/fonts.css from assets/fonts
 tools/check-timing.js  read-only: state-read latency, and duration vs finish
-Jukebox.app/         Dock launcher: double-click toggles the server on/off
+Jukebox.app/         Dock launcher: double-click toggles the server on/off;
+                     also takes start | stop | menu, which the menu bar uses
+menubar/menubar.js   menu bar icon, JXA via osascript: draws, never decides
+menubar/helper.js    the menu bar's brain, plain Node: menu as JSON, actions
+test/menubar-suite.js  helper, fake-bridge JXA, launcher + Update.command with
+                     stubbed macOS tools; on a Mac also the real AppKit selftest
 Update.command       manual update: refuses while running, pulls, runs tests
 tools/add-to-dock.command  puts Jukebox.app on the Dock, optionally at a slot
 test/genre-panel.js  browser tests for the genre settings panel
@@ -270,6 +275,43 @@ the jukebox one. Rules that keep it safe:
 - The client switches qrcode.js to its UTF-8 encoder. The default keeps only
   the low byte of each character and mangles an accented or emoji name.
 
+## The menu bar icon
+
+A ♪ in the menu bar: bright while running, greyed while stopped. Status, guest
+address, Open page, Start/Stop, Guest Network (which adapter the QR code
+uses), Check for Updates, Quit. The rules it was built on:
+
+- **menubar.js decides nothing.** It is JXA and cannot run off a Mac, so it
+  cannot be tested in CI. It asks `helper.js menu` for the menu as JSON on
+  every open (`menuNeedsUpdate:`), draws exactly that, and hands each click to
+  `helper.js do <action>` in the background. Change behaviour in the helper.
+  The only logic left in the JXA is the 3 s state tick (curl, not node, as it
+  runs all night) and Quit.
+- **Start and Stop go through Jukebox.app**, via `open -n -g Jukebox.app
+  --args start|stop`, never by spawning node. LaunchServices then launches it
+  exactly as a Dock click does, so the server's responsible process -- the
+  app TCC asks "may this control Music?" about -- is unchanged. Spawning node
+  from the menu bar would raise a fresh Automation prompt on party night.
+- **Explicit verbs, not the toggle.** `start` while running only opens the
+  page; `stop` while stopped does nothing. A click can never invert.
+- **The icon is found by its whole launch line**, `osascript -l JavaScript
+  .*menubar/menubar[.]js`, in both Jukebox.app and Update.command. A bare
+  `menubar/menubar.js` also matches an editor with the file open, and
+  Update.command pkills what it matches. (It killed the test harness's own
+  shell before it was tightened.)
+- **Guest address precedence** (`resolveGuestUrl`, lib/net.js): adapter
+  chosen in the menu (`data/network.json`, an interface name, not an IP) >
+  `PUBLIC_URL` > routing table. A chosen adapter with no address falls
+  through and sets `chosenMissing`; a dead address on the QR code is the
+  worst outcome. Read on every request, never cached. Changing it broadcasts
+  an SSE `config` event and the laptop redraws the QR code in place.
+- **Updates: check only.** `git fetch` and a count; installing is still
+  Update.command in a Terminal you can watch, offered only while stopped. A
+  stored "update available" goes stale the moment HEAD moves.
+- **It is optional.** Separate process, started in the background, never
+  waited on. If it fails the jukebox is exactly what it was.
+  `JUKEBOX_MENU_BAR=0` in jukebox.conf turns it off.
+
 ## Safety rules around the library
 
 These are not negotiable. It is somebody's real music library.
@@ -298,7 +340,8 @@ These are not negotiable. It is somebody's real music library.
 | Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
 | `position` jitter from Music | Handoff fires slightly early or late | 250 ms margin in the missed-handoff test; handoff clips <1 s by design |
 | **Two network adapters.** A Mac mini has Ethernet and Wi-Fi; only one is the network the phones are on. | Guests get a QR code for an address they cannot reach | `lib/net.js` follows the routing table, never the interface name: en0 is Wi-Fi on a laptop but Ethernet on a mini, so the name means nothing. Startup prints every address found and marks the chosen one. `PUBLIC_URL` in `jukebox.conf` overrides, and the Dock app reads that file because it has no shell. |
-| **Nothing on screen says the jukebox is running.** The launcher is `LSUIElement` and the server is detached, so it is easy to leave up after the party. | A Mac kept awake all night | `caffeinate` is capped at `AWAKE_LIMIT_SECONDS` (12h). A menu bar indicator would be the real fix; it needs an `NSStatusItem` and so a process that stays alive, which is not something to introduce untested. |
+| **Nothing on screen says the jukebox is running.** The launcher is `LSUIElement` and the server is detached, so it is easy to leave up after the party. | A Mac kept awake all night | The menu bar icon (above). `caffeinate` is still capped at `AWAKE_LIMIT_SECONDS` (12h), because the icon can be quit. |
+| **The menu bar icon has never run on a real Mac.** Written in a Linux container. Everything in `helper.js` is tested for real; `menubar.js` only against a strict fake of the JXA bridge (real AppKit selectors, JXA calling conventions, refuses unknown members and plain assignment -- seven deliberate mutations all caught). Unproven: that `NSApp.run` works under plain `osascript` (a hand-pumped event loop is the fallback if it throws), that `menuNeedsUpdate:` fires on a JXA delegate, and how `open --args` reaches a shell-script bundle. | No icon, or an icon whose menu does nothing | It is isolated: the jukebox does not depend on it. `node test/menubar-suite.js` on the Mac runs `menubar.js --selftest` against the real AppKit. Then click it once. |
 
 ## How to run things
 
@@ -310,6 +353,8 @@ ONLY=crossfade node test/mock-suite.js  # just the tests whose name matches
 MOCK=1 node server.js                   # simulator on :8484
 MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js   # with a QR
 node test/ui-suite.js /tmp/shots        # browser tests (needs Playwright)
+node test/menubar-suite.js             # menu bar: helper, fake-bridge JXA, launcher, updater (~10s)
+node menubar/helper.js view            # what the menu bar sees, as JSON (on the Mac)
 node test/party-rehearsal.js           # end-to-end against a running server
 node test/party-rehearsal.js --fast    # same, skipping through the queued picks
 
