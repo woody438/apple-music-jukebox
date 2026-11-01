@@ -71,8 +71,17 @@ start_menu_bar() {
   # Emptied here, then opened for APPEND: the helper appends to the same file,
   # and a plain > would have this process write over its lines.
   : > "$REPO/data/menubar.log"
-  nohup /usr/bin/osascript -l JavaScript "$MENU_JS" "$REPO" "$NODE" "$PORT" "${PUBLIC_URL:-}" \
-    >>"$REPO/data/menubar.log" 2>&1 &
+  # NOT nohup. Apple's nohup also detaches the process from the login (Aqua)
+  # session, and a process outside it cannot reach the WindowServer: the icon
+  # never appears, silently. (The server is fine under nohup -- it draws
+  # nothing.) Ignoring SIGHUP was the only part of nohup wanted here.
+  # The subshell stays behind to record how the icon ended, so a crash or a
+  # kill shows up in the log as a status rather than as nothing at all.
+  (
+    trap '' HUP
+    /usr/bin/osascript -l JavaScript "$MENU_JS" "$REPO" "$NODE" "$PORT" "${PUBLIC_URL:-}"
+    echo "[launcher] menu bar exited, status $? ($(date +%H:%M:%S))"
+  ) >>"$REPO/data/menubar.log" 2>&1 </dev/null &
 }
 
 start_menu_bar

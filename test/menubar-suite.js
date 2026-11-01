@@ -999,8 +999,12 @@ test('Jukebox.app: start, start again, stop, stop again, toggle -- and the icon 
     assert.equal(L('-psn_0_12345'), 0);
     assert.ok(!(await up()), 'and off -- old-style Finder arguments count as the toggle');
 
-    // Turned off in jukebox.conf.
+    // Killed, it leaves its exit status behind instead of silence.
     killMenubars(scope);
+    await waitFor(() => /\[launcher\] menu bar exited, status \d+/.test(
+      fs.readFileSync(path.join(repo, 'data', 'menubar.log'), 'utf8')), { label: 'the exit status in menubar.log', timeout: 5000 });
+
+    // Turned off in jukebox.conf.
     await sleep(200);
     fs.writeFileSync(path.join(repo, 'jukebox.conf'), 'JUKEBOX_MENU_BAR=0\n');
     const before = menubarLaunches();
@@ -1012,6 +1016,19 @@ test('Jukebox.app: start, start again, stop, stop again, toggle -- and the icon 
     killMenubars(scope);
     rm(top);
   }
+});
+
+// 19b ----------------------------------------------------------------------
+test('the icon is never started under nohup', () => {
+  // Found on the first real Mac: the log said "starting" and then nothing,
+  // and no icon ever appeared. Apple's nohup detaches the process from the
+  // login session, and outside it there is no WindowServer to draw on. The
+  // selftest passed because it runs from Terminal, without nohup.
+  const src = fs.readFileSync(path.join(ROOT, 'Jukebox.app/Contents/MacOS/Jukebox'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.ok(/osascript -l JavaScript "\$MENU_JS"/.test(code), 'the launch line is where this test expects it');
+  assert.ok(!/nohup[^\n]*osascript/.test(code), 'osascript must not be run under nohup');
+  assert.ok(/trap '' HUP/.test(code), 'SIGHUP is still ignored, which was the useful half of nohup');
 });
 
 // 20 -----------------------------------------------------------------------
