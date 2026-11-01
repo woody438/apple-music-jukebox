@@ -16,10 +16,28 @@ printf '\n%s  UPDATE PARTY JUKEBOX%s\n\n' "$B" "$O"
 
 finish() { printf '\n'; read -r -p "  Press return to close. "; exit "${1:-0}"; }
 
+# The menu bar icon is a long-running process, so it is still running the
+# code from before the pull. Restart it -- through Jukebox.app, which is what
+# normally starts it -- so the menu matches what is now on disk. Only if it
+# was running: someone who quit it does not want it back.
+# The pattern matches the icon's whole launch line, so nothing else that
+# merely mentions the file (an editor, say) is killed. Same as Jukebox.app's.
+MENU_PATTERN='osascript -l JavaScript .*menubar/menubar[.]js'
+restart_menu_bar() {
+  /usr/bin/pgrep -f "$MENU_PATTERN" >/dev/null 2>&1 || return 0
+  /usr/bin/pkill -f "$MENU_PATTERN" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    /usr/bin/pgrep -f "$MENU_PATTERN" >/dev/null 2>&1 || break
+    sleep 0.2
+  done
+  open -g -n "$(pwd)/Jukebox.app" --args menu && printf '  Restarted the menu bar icon on the new version.\n'
+}
+
 # --- never mid-party -------------------------------------------------------
 if /usr/sbin/lsof -ti "tcp:$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   printf '%s  The jukebox is RUNNING.%s\n\n' "$R" "$O"
-  printf '  Stop it first (double-click Jukebox.app), then run this again.\n'
+  printf '  Stop it first (Stop Jukebox in the menu bar, or double-click\n'
+  printf '  Jukebox.app), then run this again.\n'
   printf '  Updating underneath a running party is how a good night ends early.\n'
   finish 1
 fi
@@ -71,7 +89,8 @@ if "$NODE" test/mock-suite.js 2>&1 | tail -3 | sed 's/^/    /'; then
 fi
 
 if "$NODE" test/mock-suite.js >/dev/null 2>&1; then
-  printf '\n%s  All good.%s Start it from the Dock when you are ready.\n' "$G" "$O"
+  printf '\n%s  All good.%s Start it from the menu bar or the Dock when you are ready.\n' "$G" "$O"
+  restart_menu_bar
   finish 0
 else
   printf '\n%s  The tests FAILED on this update.%s\n\n' "$R" "$O"
