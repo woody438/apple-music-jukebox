@@ -222,11 +222,16 @@ function run(argv) {
     }
   });
 
+  // Each step says it finished, so if the icon never appears the log names
+  // the last step that worked.
+  say('step: controller registered');
   var app = $.NSApplication.sharedApplication;
+  say('step: application connected');
   app.setActivationPolicy(1);                  // Accessory: no Dock icon, no app menu
 
   controller = $.JukeboxMenuController.alloc.init;
   statusItem = $.NSStatusBar.systemStatusBar.statusItemWithLength(-1);   // NSVariableStatusItemLength
+  say('step: status item created');
 
   menu = $.NSMenu.alloc.initWithTitle('Party Jukebox');
   // Without this AppKit decides for itself which items are enabled, and
@@ -234,6 +239,7 @@ function run(argv) {
   menu.setAutoenablesItems(false);
   menu.setDelegate(controller);
   statusItem.setMenu(menu);
+  say('step: menu attached');
 
   paintIcon(probeState());
 

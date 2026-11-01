@@ -906,6 +906,9 @@ function stubDir(top) {
   // The real lsof by absolute path: a bare "lsof" would find this stub again.
   const realLsof = ['/usr/sbin/lsof', '/usr/bin/lsof', '/bin/lsof'].find((p) => fs.existsSync(p));
   w('lsof', `exec ${realLsof} "$@"`);
+  // Pretend to be Apple Silicon, where the icon must be started natively.
+  w('sysctl', `case "$*" in *hw.optional.arm64*) echo 1 ;; *) exit 1 ;; esac`);
+  w('arch', `echo "arch $1" >> '${calls}'\nshift\nexec "$@"`);
   return { dir, calls, read: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8') : '') };
 }
 
@@ -919,6 +922,8 @@ function stubbed(src, stubs, scope) {
   assert.ok(src.includes(ICON_PATTERN), 'the script still finds the icon with the pattern this suite expects');
   return src.split('/usr/sbin/lsof').join(path.join(stubs.dir, 'lsof'))
             .split('/usr/bin/osascript').join(path.join(stubs.dir, 'osascript'))
+            .split('/usr/sbin/sysctl').join(path.join(stubs.dir, 'sysctl'))
+            .split('/usr/bin/arch').join(path.join(stubs.dir, 'arch'))
             .split(ICON_PATTERN).join(`MENU_PATTERN='${scopedPattern(scope)}'`);
 }
 
@@ -974,6 +979,10 @@ test('Jukebox.app: start, start again, stop, stop again, toggle -- and the icon 
     assert.ok(m, 'and puts the icon up with the repo, node and port:\n' + calls);
     assert.ok(fs.existsSync(m[1]), 'with a node that exists');
     assert.equal(menubarLaunches(), 1);
+    assert.ok(/arch -arm64\nosascript -l JavaScript .*menubar\.js/.test(calls),
+      'on Apple Silicon the icon is started natively, through arch -arm64:\n' + calls);
+    assert.ok(/starting the menu bar natively/.test(fs.readFileSync(path.join(repo, 'data', 'menubar.log'), 'utf8')),
+      'and the log says so');
     assert.ok(!fs.existsSync(path.join(repo, 'data', 'launcher-starting.pid')), 'the starting marker is cleared on exit');
     const pid = listener();
 
@@ -999,8 +1008,12 @@ test('Jukebox.app: start, start again, stop, stop again, toggle -- and the icon 
     assert.equal(L('-psn_0_12345'), 0);
     assert.ok(!(await up()), 'and off -- old-style Finder arguments count as the toggle');
 
-    // Turned off in jukebox.conf.
+    // Killed, it leaves its exit status behind instead of silence.
     killMenubars(scope);
+    await waitFor(() => /\[launcher\] menu bar exited, status \d+/.test(
+      fs.readFileSync(path.join(repo, 'data', 'menubar.log'), 'utf8')), { label: 'the exit status in menubar.log', timeout: 5000 });
+
+    // Turned off in jukebox.conf.
     await sleep(200);
     fs.writeFileSync(path.join(repo, 'jukebox.conf'), 'JUKEBOX_MENU_BAR=0\n');
     const before = menubarLaunches();
@@ -1012,6 +1025,22 @@ test('Jukebox.app: start, start again, stop, stop again, toggle -- and the icon 
     killMenubars(scope);
     rm(top);
   }
+});
+
+// 19b ----------------------------------------------------------------------
+test('on Apple Silicon the icon is never left to run under Rosetta', () => {
+  // Found on the first real Mac (Apple Silicon). Started by Jukebox.app the
+  // icon logged "starting", then spun at 100% CPU forever with no icon; the
+  // same command from Terminal worked. A `sample` of the stuck process showed
+  // x86_64 addresses and libRosetta: LaunchServices runs a shell-script app
+  // as Intel code, and osascript inherited it. nohup and the inherited bundle
+  // id were both tested on the Mac and ruled out.
+  const src = fs.readFileSync(path.join(ROOT, 'Jukebox.app/Contents/MacOS/Jukebox'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+  assert.ok(/\$native \/usr\/bin\/osascript -l JavaScript "\$MENU_JS"/.test(code), 'osascript is launched through $native');
+  assert.ok(/sysctl -n hw\.optional\.arm64[^\n]*native="\/usr\/bin\/arch -arm64"/.test(code),
+    '$native is arch -arm64 exactly when the Mac is Apple Silicon');
+  assert.ok(/trap '' HUP/.test(code), 'SIGHUP is still ignored');
 });
 
 // 20 -----------------------------------------------------------------------
