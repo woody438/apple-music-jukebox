@@ -260,7 +260,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (const f of failures) console.log('  - ' + f);
     console.log('');
   } else {
-    console.log('\nAll good. Run the real server next:  ./start.command\n');
+    console.log('\nAll good. Music is scriptable on this Mac: Party Jukebox will work here.\n');
   }
   process.exit(fail ? 1 : 0);
 })().catch((e) => {

@@ -8,7 +8,7 @@
     "start": "node server.js",
     "mock": "MOCK=1 node server.js",
     "test": "node test/mock-suite.js",
-    "test:menubar": "node test/menubar-suite.js",
+    "test:network": "node test/network-suite.js",
     "test:conf": "node test/conf-suite.js",
     "preflight": "node preflight.js"
   },

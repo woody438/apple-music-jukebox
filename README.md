@@ -1,101 +1,90 @@
 # Party Jukebox
 
-A jukebox web UI that drives the **Music app** on a Mac. The laptop shows a
-1950s cabinet full-screen; guests pick songs from their phones over the same
-Wi-Fi by scanning a QR code. Picks play in order, first come first served.
-When the picks run out, Music's own Autoplay keeps the room going.
+A jukebox for your Mac's **Music** app. The laptop shows a 1950s cabinet
+full-screen; guests pick songs from their phones by scanning a QR code on the
+same Wi-Fi. Picks play in order, first come first served. When the picks run
+out, Music's own Autoplay keeps the room going.
 
-Your library only. No Apple Developer account, no MusicKit, no Apple Music API.
-Zero npm dependencies, no build step, nothing fetched from the internet at
-run time — the fonts and the QR library are in the repo.
+Your library only. No Apple Developer account, no MusicKit, no Apple Music
+API, no account of any kind, and nothing fetched from the internet while it
+runs.
 
 ---
 
-## THE MAC APP (the easy way)
+## Download
 
-**[Download Party Jukebox](https://github.com/woody438/apple-music-jukebox/releases/download/latest/PartyJukebox.zip)**
-— a Mac with an Apple chip, macOS 14 or later. No git, no Terminal, no Node
-to install: the app carries everything it needs.
+**[Download Party Jukebox](https://github.com/woody438/apple-music-jukebox/releases/download/latest/PartyJukebox.zip)** (about 45 MB)
 
-1. Unzip it and drag **Party Jukebox** into Applications.
-2. Open it. macOS blocks it the first time, because the app isn't notarised
-   by Apple: open **System Settings ▸ Privacy & Security**, scroll down, and
-   click **Open Anyway**. That is the only time.
-3. The jukebox starts and its page opens. A ♪ appears in the menu bar and
-   Party Jukebox in the Dock.
+Needs a Mac with an **Apple chip** (M1 or later) and **macOS 14** or later.
+Everything it needs is inside it: nothing else to install.
+[All builds and notes](https://github.com/woody438/apple-music-jukebox/releases/tag/latest).
+
+1. Unzip it and drag **Party Jukebox** into **Applications**.
+2. Open it. The first time, macOS blocks it, because it isn't notarised by
+   Apple. Open **System Settings ▸ Privacy & Security**, scroll down, and
+   click **Open Anyway**. You only ever do this once.
+3. The jukebox starts and its page opens in your browser. A **♪** appears in
+   the menu bar, and Party Jukebox in the Dock.
 4. At the first song, macOS asks whether **Party Jukebox may control Music**.
-   Allow it. That too is asked once: every update is signed with the same
-   certificate, so macOS knows it as the same app.
+   Allow it — that is how it plays your guests' picks. It is asked once:
+   updates are signed with the same certificate, so macOS knows them as the
+   same app.
 
-Then work down [the party checklist](#the-party-checklist) — Autoplay on,
-crossfade off, firewall, same Wi-Fi. The app does not change any of that for you.
-
-**Everything is in the ♪ menu:** whether it's running, the address guests
-get, Open Jukebox Page, Start / Stop / Restart, Guest Network, updates, and
-**Settings…** (⌘,) — the marquee title, the guest rules, the Wi-Fi QR code,
-the guest network and more, as controls. A setting that the jukebox reads at
-start says so after you save, and offers **Restart Jukebox Now**: the queue is
-kept and Music carries on playing. Clicking the Dock icon opens the page.
-Quitting the app stops the jukebox, and Music carries on playing.
-
-**Updates come to you.** The app looks for a new build at launch and every
-four hours, and asks before installing — and if the jukebox is playing, it
-says so first. Install, and it quits, updates and reopens by itself in a few
-seconds. Nothing is ever installed without you saying so.
-
-Its settings, queue and log live in `~/Library/Application Support/Party
-Jukebox`. The first time it opens on a Mac that had the git install below,
-it brings that install's `jukebox.conf`, guest network choice and queue across.
-
-The rest of this README is the git install, which the app replaces, and the
-details behind both.
+Then work down [the party checklist](#the-party-checklist).
 
 ---
 
-## GET IT ONTO THE PARTY LAPTOP (the git install)
+## Using it
 
-**Clone it. Don't download the ZIP.** Two things break in a ZIP: it loses the
-executable bit on `start.command`, and macOS quarantines anything downloaded
-through a browser, so double-clicking gets you "cannot be opened because it is
-from an unidentified developer". Cloning avoids both.
+**Everything is in the ♪ menu** in the menu bar:
 
-First check Node is there:
+| Item | Does |
+|---|---|
+| **Jukebox is running**, **Guests: 192.168.1.40:8484** | Whether it's on, and the exact address on the QR code |
+| **Open Jukebox Page** | The cabinet, at `http://localhost:8484/` — always localhost, so you get the host controls |
+| **Start / Stop / Restart Jukebox** | Stopping leaves Music playing whatever is on; starting again brings the queue back |
+| **Guest Network** | Which network adapter the QR code points at — see [two network adapters](#two-network-adapters) |
+| **Check for Updates…** / **Install Update** | See [updates](#updates) |
+| **Settings…** (⌘,) | Everything below, as controls |
+| **Show Log** | What the jukebox has been doing, for when something's off |
+| **Quit Party Jukebox** | Stops the jukebox. Music carries on playing |
 
-```bash
-node -v
-```
+Clicking the Dock icon opens the jukebox page (or starts the jukebox if it
+was stopped). While the jukebox runs, the Mac doesn't sleep and the display
+stays on — so plug the laptop in.
 
-If that errors, or prints anything below v18:
+### Settings
 
-```bash
-brew install node
-```
+**♪ ▸ Settings…** (or ⌘, while Party Jukebox is in front):
 
-(No Homebrew? Get it from https://brew.sh first.) Then:
+| Tab | What's in it |
+|---|---|
+| **General** | The marquee title on the cabinet · the name of the Music playlist the queue lives in · start the jukebox when the app opens · open the app at login |
+| **Guests** | How many songs each phone, the laptop, and everyone together may have waiting · minutes before the same song can be picked again (0 = no rule) |
+| **Wi-Fi Code** | A second QR code that joins phones to your Wi-Fi — see [Wi-Fi QR code](#wi-fi-qr-code) |
+| **Network** | Which address guests are given, and a fixed address for unusual networks |
+| **Updates** | Status, Check Now, preview builds, and the settings file and data folder |
 
-```bash
-git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
-```
+If a value won't work, it says why beside the field and nothing is saved.
+Most settings are read when the jukebox starts, so after saving one the
+window offers **Restart Jukebox Now** — the queue is kept and Music carries
+on playing. Guest Network changes apply at once.
 
-```bash
-cd ~/Developer/apple-music-jukebox && node preflight.js
-```
+Settings, the queue and the log live in
+`~/Library/Application Support/Party Jukebox`. The settings themselves are
+an ordinary text file there, `jukebox.conf`, which the window reads and
+writes; you never need to touch it.
 
-**Do preflight before anything else.** It is the only thing that has ever
-exercised the AppleScript against a real Music app. It triggers the automation
-permission prompt on your terms rather than mid-party, and it checks your
-library is untouched at the end.
+### Updates
 
-<details>
-<summary>If you really do end up with a ZIP</summary>
+Party Jukebox looks for a new build when it opens and every four hours. When
+there is one, it **asks** — it never installs by itself, and if the jukebox
+is playing it tells you that installing restarts it for about ten seconds
+(the queue is kept, Music keeps playing). Say **Install** and it downloads,
+checks the download is really signed by this project, quits, updates and
+reopens.
 
-```bash
-cd ~/Downloads/apple-music-jukebox-main && chmod +x start.command && xattr -dr com.apple.quarantine .
-```
-
-The `chmod` puts the executable bit back; the `xattr` clears the download
-quarantine. Without both, double-clicking `start.command` does nothing useful.
-</details>
+**Check for updates before a party, not during one.**
 
 ---
 
@@ -115,268 +104,29 @@ Work down this list. The first four are the ones that actually ruin parties.
    few seconds, and until that first measurement the very first change of
    the night can still show a moment of the wrong song.
 
-2. **Approve the automation prompt.**
-   The first time the jukebox talks to Music, macOS asks whether Terminal may
-   control Music. Say yes. If you miss it:
-   **System Settings → Privacy & Security → Automation → Terminal → Music**.
-   Run `node preflight.js` once in advance to trigger it on your terms.
+2. **Allow Party Jukebox to control Music.**
+   macOS asks the first time the jukebox talks to Music. If you missed it or
+   said no: **System Settings → Privacy & Security → Automation → Party
+   Jukebox → Music**, switched on.
 
 3. **Allow incoming connections.**
-   **System Settings → Network → Firewall**. Either turn it off for the night
-   or allow incoming connections for Node. Without this, phones cannot reach
-   the laptop and nothing a guest taps will work.
+   If the macOS firewall is on (**System Settings → Network → Firewall**),
+   allow incoming connections when it asks about Party Jukebox (it may name
+   it **node**). Without this, phones cannot reach the laptop and nothing a
+   guest taps will work.
 
 4. **Guests must be on the SAME Wi-Fi as the laptop.**
    Not the guest network. Many routers isolate guest clients from each other,
    which silently blocks every phone. If picks fail from phones but work on
-   the laptop, this is why. To save everyone asking for the password, put it
-   in `jukebox.conf` and the cabinet shows a join-the-Wi-Fi QR code too — see
-   [Wi-Fi QR code](#wi-fi-qr-code).
-
-5. **Plug the laptop into power.** `start.command` keeps the Mac and the
-   display awake for as long as it runs, which flattens a battery fast.
-
-6. **Do a full dry run tonight.** Queue three songs, let the queue run dry
-   into Autoplay, then pick again and confirm the pick starts right after the
-   Autoplay song ends.
-
----
-
-## Running it
-
-### The Dock app
-
-**You already have it** — it came down with the clone. There is nothing to
-download and nothing to install.
-
-Open the folder in Finder:
-
-```bash
-open ~/Developer/apple-music-jukebox
-```
-
-Drag **Jukebox.app** onto the Dock, then right-click it there and pick
-**Options → Keep in Dock**.
-
-Or let the Mac do it for you:
-
-```bash
-defaults write com.apple.dock persistent-apps -array-add "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>$HOME/Developer/apple-music-jukebox/Jukebox.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>" && killall Dock
-```
-
-If Finder shows it as a plain folder instead of an app, it just has not
-noticed yet — `touch ~/Developer/apple-music-jukebox/Jukebox.app` and it will.
-
-**To put it in a particular spot** (handy for making a second Mac match the
-first), positions count app icons from the left starting at 1:
-
-```bash
-./tools/add-to-dock.command 3
-```
-
-To see what order a Dock is in now:
-
-```bash
-defaults export com.apple.dock - | python3 -c "import plistlib,sys;print(' | '.join('%d:%s'%(i+1,e['tile-data']['file-label']) for i,e in enumerate(plistlib.loads(sys.stdin.buffer.read()).get('persistent-apps',[]))))"
-```
-
-### A second Mac
-
-```bash
-git clone https://github.com/woody438/apple-music-jukebox.git ~/Developer/apple-music-jukebox
-```
-
-Then check Node is there:
-
-```bash
-node -v
-```
-
-**`command not found: node`?** This installs it either way — Homebrew if you
-have it, the official package if you don't. It will ask for your Mac password
-if it takes the second route:
-
-```bash
-if command -v brew >/dev/null 2>&1; then brew install node; else VER=$(curl -fsSL https://nodejs.org/dist/index.json | python3 -c "import json,sys;print([r for r in json.load(sys.stdin) if r.get('lts')][0]['version'])"); echo "Installing Node $VER..."; curl -fL --progress-bar "https://nodejs.org/dist/$VER/node-$VER.pkg" -o /tmp/node.pkg && sudo installer -pkg /tmp/node.pkg -target / && /usr/local/bin/node -v; fi
-```
-
-The macOS installer is a **universal** package named `node-vX.Y.Z.pkg`, with
-no architecture in the name. The `-darwin-arm64` suffix belongs to the
-`.tar.gz` archives only, and using it on the `.pkg` gets you a 404.
-
-Both routes put Node where `Jukebox.app` looks for it (`/opt/homebrew/bin`
-or `/usr/local/bin`), which matters: an app launched from the Dock gets a
-bare `PATH` and cannot see your shell's.
-
-Then:
-
-```bash
-cd ~/Developer/apple-music-jukebox && node preflight.js && ./tools/add-to-dock.command
-```
-
-**Run preflight on the new machine too.** It is a different Mac: it needs its
-own "control Music" permission, its own Node, and its own check that nothing
-in your library trips it up. Do not assume it works because the first one did.
-
-Two things that catch people out:
-
-- **Persistent IDs are per-library, not per-account.** Even with the same
-  iCloud Music Library, a track's ID differs between Macs. Nothing transfers
-  between them — each builds its own index, and a queue saved on one is
-  meaningless on the other. (`data/` is not in git, so this sorts itself out.)
-- **Do not run both at once on the same Wi-Fi.** Guests scan whichever QR
-  code is in front of them, and half the picks end up on a laptop that is not
-  plugged into the PA. One jukebox per party.
-
-- **Double-click: starts.** It opens Music if it isn't open, starts the
-  server, stops the Mac sleeping, and opens the jukebox in your browser.
-- **Double-click again: stops.**
-
-There is no "are you sure" on stopping, on purpose. Stopping the jukebox
-does **not** stop Music — the room keeps playing whatever is on — and
-starting it again restores the queue, so a mis-click costs one more click.
-A confirmation dialog would need its own permission and could fail quietly,
-which is worse at a party.
-
-If it ever refuses to start, the reason is in `data/jukebox.log`.
-
-It still caps how long it keeps the Mac awake at 12 hours — long enough to
-outlast any party, short enough that a jukebox forgotten overnight does not
-flatten the battery. Override with `AWAKE_LIMIT_SECONDS` if you need to.
-
-### The menu bar icon
-
-Starting the jukebox also puts a **♪ note icon in the menu bar** at the top of
-the screen. It's how you tell at a glance whether the jukebox is on:
-
-- **bright** — running
-- **greyed out** — stopped
-- **♪ …** — starting up
-
-Click it for:
-
-| Item | Does |
-|---|---|
-| **Jukebox is running / stopped**, **Guests: …** | What's happening, and the exact address on the QR code |
-| **Open Jukebox Page** | Opens `http://localhost:8484/` — always localhost, so you get the host controls |
-| **Start Jukebox** / **Stop Jukebox** | The same as double-clicking the Dock icon, but it never toggles the wrong way. Stop still leaves Music playing |
-| **Guest Network** | Which network adapter the QR code points at. **Automatic** follows the routing table (or `PUBLIC_URL` in `jukebox.conf`, if you set one). Pick an adapter — *Wi-Fi (en1) — 192.168.1.40* — and the QR code on the cabinet changes there and then, no restart. The choice sticks, and follows the adapter if its address changes |
-| **Check for Updates…** | Looks on GitHub and tells you (a notification, then the menu) whether there is anything new. It only *looks* — nothing changes until you choose **Install Update**, which opens `Update.command`. That is only offered while the jukebox is stopped |
-| **Quit Menu Bar Icon** | Hides the icon. Does not stop the jukebox |
-
-The icon stays after you stop the jukebox, so you can start it again from
-there. If you quit it, the next double-click on the Dock icon brings it back
-— but that click also starts or stops the jukebox, as it always has. To get
-just the icon back, leaving the jukebox alone:
-
-```bash
-open -g -n ~/Developer/apple-music-jukebox/Jukebox.app --args menu
-```
-
-**It is a separate background process**, so if it ever fails to appear the
-jukebox works exactly as it did before it existed — Dock icon and all.
-Anything it has to say is in `data/menubar.log`. To turn it off for good, put
-`JUKEBOX_MENU_BAR=0` in `jukebox.conf`.
-
-**First time on a Mac, check it works** (about ten seconds, and it changes
-nothing):
-
-```bash
-cd ~/Developer/apple-music-jukebox && node test/menubar-suite.js
-```
-
-The last test runs the icon against the real macOS menu bar and prints
-PASS/FAIL per step. In Activity Monitor the icon shows up as `osascript`.
-
-On a MacBook with a notch, a crowded menu bar can hide icons behind the
-notch. If you can't see the note, quit something else that lives up there.
-
-### Updating
-
-Double-click **`Update.command`** — or from the menu bar, **Check for
-Updates…** then **Install Update**, which opens the same thing. It refuses to
-run while the jukebox is up, pulls the latest, and then runs the engine tests
-so you see green before you trust it. If the tests fail it tells you how to go
-back. When it succeeds it restarts the menu bar icon, so the menu is on the
-new version too.
-
-There is **no automatic updater**, on purpose. An updater exists to change the
-code, and on the one night this matters that is risk with no upside. Update
-when you choose to, not mid-party.
-
-
-
-### On the night
-
-Double-click **`start.command`**. It checks Node, opens Music if it is not
-already running, starts the server, keeps the Mac awake, and opens the
-jukebox in your browser.
-
-Then press **control-command-F** for full screen.
-
-Stop it with **control-C** in the Terminal window it opened.
-
-### Before the night: preflight
-
-```bash
-node preflight.js
-```
-
-Checks everything against the real Music app and prints PASS/FAIL per step.
-It works in its own **"Jukebox Preflight"** playlist, and it confirms your
-library has exactly as many tracks at the end as it did at the start.
-
-It plays about five seconds of audio, and asks first.
-
-```bash
-node preflight.js --no-audio   # skip the playback step
-node preflight.js --yes        # do not ask
-```
-
-### Try the UI with no Mac at all
-
-`demo/jukebox-demo.html` is the whole interface in one self-contained file —
-the real markup, the real stylesheet, the embedded fonts — with a simulated
-player and a 338-track demo library baked in. Open it straight off disk, or
-scan the QR code on screen to pull it up on your phone.
-
-```bash
-open demo/jukebox-demo.html
-```
-
-A **DEMO** tag in the bottom corner holds a clock-speed control and a
-"jump to end of song" button, so you can watch the handoff and the run into
-Autoplay in seconds rather than minutes.
-
-**It proves nothing about the Music integration** — there is no Music app
-behind it. `preflight.js` is what proves that. Rebuild it after changing the
-UI with `node demo/build.js`.
-
-### Without a Mac, or without touching your library: mock mode
-
-```bash
-MOCK=1 node server.js
-```
-
-A simulated Music app with a fake 2,000-song library and short tracks. Nothing
-is played, nothing is touched. Good for showing someone the UI.
-
-```bash
-node test/mock-suite.js        # the engine test suite, no Mac needed
-```
-
-### The dry run
-
-With the server running in another window — mock or real:
-
-```bash
-node test/party-rehearsal.js
-```
-
-It queues three songs as the laptop and one as a phone, lets the queue run dry
-into Autoplay, picks again, and confirms the pick does not cut the Autoplay
-song off and starts the moment it ends. Add `--fast` against a real library,
-or you will sit through four whole songs.
+   the laptop, this is why. To save everyone asking for the password, turn on
+   the [Wi-Fi QR code](#wi-fi-qr-code).
+
+5. **Plug the laptop into power.** The Mac and its display stay awake for as
+   long as the jukebox runs, which flattens a battery fast.
+
+6. **Do a full dry run.** Queue three songs, let the queue run dry into
+   Autoplay, then pick again and confirm the pick starts right after the
+   Autoplay song ends. Scan the QR code with your own phone too.
 
 ---
 
@@ -449,9 +199,8 @@ reach them, so nobody can skip your song from the kitchen.
 | **⌃⌥F** | Full screen |
 
 > **Hotkey clash:** Rectangle and Magnet both use **⌃⌥←/→** for window
-> snapping by default, which collides with skip. `preflight.js` checks whether
-> either is installed. If it is, quit it for the party or change `MODIFIER` at
-> the top of `public/app.js`.
+> snapping by default, which collides with skip. If you use either, quit it
+> for the party.
 
 The hardware media keys on the keyboard still control Music directly, and the
 engine handles that: pausing with the media key sets **hold**, so picks queue
@@ -459,61 +208,50 @@ up but nothing starts until you press play again.
 
 ---
 
+---
+
 ## If something goes wrong
 
 | What you see | Almost certainly | Do this |
 |---|---|---|
-| Preflight fails at "control Music" | The automation permission was never granted | System Settings → Privacy & Security → Automation → your Terminal → tick **Music**, then run preflight again |
-| Preflight fails on a `scripts/` step | A property name differs on your macOS version | Send me the exact PASS/FAIL output. (Passed 17/17 on macOS 25.6 / Node 26.8 over a 13,375-track library.) |
-| Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the URL on your own phone first |
-| The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox advertised the wrong one | Menu bar icon → **Guest Network** → pick the other adapter. See below |
-| No note icon in the menu bar | It failed to start, it was quit, or it's hidden behind the notch | `open -g -n ~/Developer/apple-music-jukebox/Jukebox.app --args menu` brings it back without touching the jukebox. If it still isn't there, look in `data/menubar.log` and run `node test/menubar-suite.js` |
+| macOS says Party Jukebox "can't be opened" | It isn't notarised by Apple | System Settings → Privacy & Security → **Open Anyway**. Once only |
+| No songs play; the log says it can't control Music | The Music permission was refused | Checklist item 2 |
+| Phones can't load the page at all | Firewall, or they're on the guest Wi-Fi | Checklist items 3 and 4. Test by loading the address on your own phone first |
+| The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox picked the wrong one | ♪ → **Guest Network** → the other adapter. See below |
+| No ♪ in the menu bar | Party Jukebox isn't open, or the menu bar is too crowded (behind the notch) | Open it from Applications. On a MacBook with a notch, quit another menu bar app |
 | Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
 | Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
-| A second of a different song between two picks | Music moved on before the jukebox did | The log line for that pick will say `RECOVERED`. With crossfade on, look for `Music is leaving tracks Ns early` — once that line appears it should stop. If it keeps happening, send me the log |
-| A pick plays for half a second, then the next pick starts | Fixed (a stale read of Music started the pick after next) | Run `./Update.command`. If you still see it, send me the log |
+| A second of a different song between two picks | Music moved on before the jukebox did | ♪ → Show Log: that pick's line says `RECOVERED`. With crossfade on, look for `Music is leaving tracks Ns early` — once that appears it should stop. If it keeps happening, report it with the log |
 | Music stops dead when the queue runs out | Autoplay (∞) is off | Open Playing Next in Music and light up the **∞** |
-| A pick plays but then silence | The track was unchecked or cloud-unavailable | It should have been excluded. Re-index with ⌃⌥R and tell me |
-| ⌃⌥→ does nothing | Rectangle or Magnet has that shortcut | Quit it for the night, or change `MODIFIER` at the top of `public/app.js` |
-| Laptop goes to sleep mid-party | You started the server by hand, not via `start.command` | `start.command` runs `caffeinate` tied to the server. Use it |
-| Queue looks wrong after a restart | It restores from `data/state.json` | ⌃⌥H → Clear queue, and it rebuilds from scratch |
+| A pick plays but then silence | The track was unchecked or cloud-unavailable | It should have been excluded. Re-index with ⌃⌥R and report it |
+| ⌃⌥→ does nothing | Rectangle or Magnet has that shortcut | Quit it for the night |
+| "Update ready" but Install says it isn't signed | You have a very early test build | Download the app again from the link at the top, once |
+| Queue looks wrong after a restart | It is restored from disk | ⌃⌥H → Clear queue, and it rebuilds from scratch |
 
-The host panel (**⌃⌥H**) shows the last error the engine hit. That's the first
-place to look when something is off.
+The host panel (**⌃⌥H** on the cabinet) shows the last error the jukebox hit,
+and **♪ → Show Log** shows everything. Those are the first places to look.
 
 ### Two network adapters
 
-A Mac with both Ethernet and Wi-Fi has two addresses, and only one of them is
-on the network the phones are using. The jukebox follows the routing table —
-the adapter the Mac actually sends traffic out of — and prints every address
-it found at startup, marking the one it chose. If that's the wrong one, don't
-unplug anything; just pick the right one.
+A Mac with both Ethernet and Wi-Fi — a Mac mini, say — has two addresses, and
+only one of them is on the network the phones are using. The jukebox follows
+the routing table: the adapter the Mac actually sends traffic out of. If
+that's the wrong one, don't unplug anything; just pick the right one.
 
-**The easy way: the menu bar icon.** Click the note, look under **Guest
-Network**, and pick the adapter the phones are on — *Wi-Fi* or *Ethernet*,
-each with its address. The QR code on the cabinet changes straight away,
-nothing restarts, and the choice is remembered on that Mac. **Automatic**
-puts it back.
+Click the ♪, look under **Guest Network**, and pick the adapter the phones
+are on — *Wi-Fi* or *Ethernet*, each with its address. The QR code on the
+cabinet changes straight away, nothing restarts, and the choice is
+remembered on that Mac. **Automatic** puts it back. (The same choice is in
+**Settings → Network**.)
 
-A choice made there beats `PUBLIC_URL` in `jukebox.conf`. If the chosen
-adapter loses its address (cable out, Wi-Fi off), the jukebox falls back to
-automatic rather than showing a dead address, and the menu says so.
+The choice is an adapter, not an address, so it keeps working when the
+router hands out a different address next time. If the chosen adapter loses
+its address (cable out, Wi-Fi off), the jukebox falls back to automatic
+rather than showing a dead address, and the menu says so.
 
-**The old way, pinning an exact address** — still works. Find the addresses:
-
-```bash
-for i in en0 en1 en2 en3 en4; do ip=$(ipconfig getifaddr $i 2>/dev/null) && echo "$i = $ip"; done
-```
-
-Pin it, so the Dock app uses it too (an app launched from the Dock has no
-shell, so an environment variable set in Terminal never reaches it):
-
-```bash
-cd ~/Developer/apple-music-jukebox && { [ -f jukebox.conf ] || cp jukebox.conf.example jukebox.conf; } && open -e jukebox.conf
-```
-
-Uncomment the `PUBLIC_URL` line, put the right address in, save, and restart
-the jukebox. `jukebox.conf` is per-machine and is not tracked by git.
+For an unusual network where neither works, **Settings → Network → Fixed
+address** pins an exact web address instead. An adapter picked in the menu
+still takes priority over it.
 
 ## Wi-Fi QR code
 
@@ -521,59 +259,42 @@ A second code on the laptop screen, above the jukebox one. A guest scans it,
 the phone offers to join the network, then they scan the jukebox code. The
 iPhone and Android cameras both do this with no app.
 
-```bash
-cd ~/Developer/apple-music-jukebox && { [ -f jukebox.conf ] || cp jukebox.conf.example jukebox.conf; } && open -e jukebox.conf
-```
+**♪ → Settings… → Wi-Fi Code**: switch it on, type the network name and
+password, **Save**, then **Restart Jukebox Now**.
 
-Uncomment the two `JUKEBOX_WIFI_` lines, fill them in, save, restart:
-
-```
-JUKEBOX_WIFI_NAME='Home Wi-Fi'
-JUKEBOX_WIFI_PASSWORD='the password'
-```
-
-- **Single quotes.** The file is read by the shell, so a `$` in a
-  double-quoted password is silently mangled. A `'` in the password is
-  written `'\''`.
-- **The startup log confirms it** with a `Wi-Fi QR code joins` line. It
-  never prints the password.
+- **It must be the network the laptop is on** — checklist item 4.
 - **The password is printed under the code** for anyone whose camera won't
   join from a scan. The code holds it in plain text anyway.
-- **Only the laptop gets it.** Phones asking the server are told nothing.
-- **It must be the network the laptop is on** — checklist item 4.
-- **Scan it with your own phone before the party.** Forget the network first,
-  then scan, so you know it really joins.
-
-`jukebox.conf` is not tracked by git, so the password never reaches GitHub.
+- **Only the laptop shows it.** Phones asking the jukebox are told nothing.
+- **It stays on this Mac.** The password is kept in the settings file in your
+  Library folder, readable by your user only. It is never uploaded anywhere.
+- **Scan it with your own phone before the party.** Forget the network on the
+  phone first, then scan, so you know it really joins.
 
 ---
 
 ## Guest rules
 
-Set at the top of `server.js`:
+All in **Settings → Guests**:
 
-| Rule | Default | Change it with |
-|---|---|---|
-| Queued picks per phone | 25 | `JUKEBOX_MAX_PER_PHONE` |
-| Queued picks for the laptop | 25 | `JUKEBOX_MAX_PER_LAPTOP` |
-| Maximum queue length | 60 | `JUKEBOX_MAX_QUEUE` |
-| No repeat within | 60 minutes (the laptop is exempt) | `JUKEBOX_REPEAT_MINUTES`, `0` turns it off |
-| No duplicate of the playing or a queued song | always | — |
-
-Set any of them in `jukebox.conf` (copy `jukebox.conf.example`) and restart.
-The startup log prints the rules in force.
+| Rule | Default |
+|---|---|
+| Songs waiting per phone | 25 |
+| Songs waiting for the laptop | 25 |
+| Songs waiting in total | 60 |
+| No repeat within | 60 minutes (0 turns it off; the laptop is exempt) |
+| No duplicate of the playing or a queued song | always |
 
 **The cap is on songs still WAITING.** Once a song starts playing it has left
 the queue and freed its slot, so everyone gets another turn as the night goes.
 
 **"Why can I only queue a few on the laptop, and where is the gear?"**
-Same cause. The laptop only counts as the
-laptop when the browser is at **`http://localhost:8484/`**. Open it by the
-machine's LAN address instead — by scanning your own QR code, say — and the
-server sees an ordinary guest: the phone limit applies, the genre gear is
-hidden, and the host hotkeys do nothing. Press **⌃⌥H** there and it now
-tells you so. The Dock app always opens `localhost`, so this only happens if
-you navigate there yourself or scan your own QR code.
+The laptop only counts as the laptop when the browser is at
+**`http://localhost:8484/`**. Open it by the Mac's network address instead —
+by scanning your own QR code, say — and the jukebox sees an ordinary guest:
+the phone limit applies, the genre gear is hidden, and the host hotkeys do
+nothing. Press **⌃⌥H** there and it tells you so. **Open Jukebox Page** in
+the ♪ menu always opens `localhost`.
 
 ---
 
@@ -590,24 +311,74 @@ The host panel shows how many of each were dropped.
 
 ---
 
-## Configuration
+---
 
-Environment variables, all optional:
+## For developers
 
-| Variable | Default | Notes |
-|---|---|---|
-| `PORT` | `8484` | Avoid 5000 and 7000 — AirPlay Receiver uses those |
-| `JUKEBOX_TITLE` | `JUKEBOX` | The neon marquee text |
-| `JUKEBOX_PLAYLIST` | `Jukebox` | The playlist the queue mirrors into |
-| `PUBLIC_URL` | auto | Override the QR URL if the detected address is wrong |
-| `JUKEBOX_WIFI_NAME` | — | Shows a join-the-Wi-Fi QR code. See [Wi-Fi QR code](#wi-fi-qr-code) |
-| `JUKEBOX_WIFI_PASSWORD` | — | Its password. Empty means an open network |
-| `MOCK` | — | `1` for the simulator |
+The app is a native Swift shell (`app/`) around a zero-dependency Node
+server (`server.js`, `lib/`, `public/`, `scripts/`) that drives Music with
+AppleScript and JXA. `CLAUDE.md` is the engineering notebook: read it before
+changing the engine.
+
+```bash
+git clone https://github.com/woody438/apple-music-jukebox.git && cd apple-music-jukebox
+```
+
+**No Mac, or no wish to touch your library — mock mode.** A simulated Music
+with a fake library and short tracks; nothing is played or touched:
+
+```bash
+MOCK=1 node server.js
+```
+
+**Tests** (no Mac needed, except where noted):
+
+```bash
+node test/mock-suite.js        # the queue engine
+```
+
+```bash
+node test/conf-suite.js        # the Settings window's reading and writing of jukebox.conf
+```
+
+```bash
+node test/network-suite.js     # which address guests get, and changing it live
+```
+
+```bash
+node test/ui-suite.js /tmp/shots    # the cabinet in a browser (needs Playwright; start a mock server first)
+```
+
+```bash
+node test/party-rehearsal.js   # end to end against a running server, mock or real (--fast for a real library)
+```
+
+**Against the real Music app, on a Mac:** `node preflight.js` checks every
+script in `scripts/` against your library, in its own "Jukebox Preflight"
+playlist, and confirms the library is untouched at the end. It plays about
+five seconds of audio and asks first (`--no-audio`, `--yes`).
+
+**The UI with no server at all:** `demo/jukebox-demo.html` is the whole
+interface in one file with a simulated player — `open demo/jukebox-demo.html`.
+Rebuild it after a UI change with `node demo/build.js`. It proves nothing
+about Music.
+
+**Building and releasing the app.** Every pull request is built on GitHub's
+Mac runners (`.github/workflows/build-app.yml`): the suites run on the exact
+Node the app ships, the built app is launched and smoke-tested, signed, and
+published as the [preview](https://github.com/woody438/apple-music-jukebox/releases/tag/preview)
+pre-release. **Merging to `main` publishes the
+[latest](https://github.com/woody438/apple-music-jukebox/releases/tag/latest) release, and every installed copy is
+offered it** — so nothing goes to `main` that wasn't green on its pull
+request. To build locally: `brew install xcodegen && cd app && xcodegen
+generate`, then open `PartyJukebox.xcodeproj` (it needs `tools/app/` to add
+Node and the jukebox; see `.github/workflows/build-app.yml`).
 
 ---
 
 ## Licences
 
+- **Node.js** — MIT, bundled inside the app (`node-LICENSE` in its Resources)
 - **Monoton** and **Oswald** — SIL Open Font License 1.1
   (`assets/fonts/LICENSE-*.txt`), embedded as base64 in `public/fonts.css`
 - **qrcode-generator** by Kazuhiko Arase — MIT (`public/vendor/qrcode.js`)
