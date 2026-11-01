@@ -70,6 +70,7 @@ if (MOCK) {
     writeLatencyMs: Number(process.env.MOCK_WRITE_LATENCY) || 5,
     readLatencyMs: Number(process.env.MOCK_READ_LATENCY) || 0,
     autoplay: process.env.MOCK_AUTOPLAY !== '0',
+    crossfadeSec: Number(process.env.MOCK_CROSSFADE) || 0,
     log,
   });
   log('MOCK MODE: simulated Music, no real audio');

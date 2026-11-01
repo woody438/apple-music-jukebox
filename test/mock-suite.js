@@ -1,7 +1,8 @@
 'use strict';
 
 // MOCK=1 test suite. No real Music, no audio, no Mac required.
-// Run: node test/mock-suite.js        (VERBOSE=1 for engine logging)
+// Run: node test/mock-suite.js        (VERBOSE=1 for engine logging,
+//                                     ONLY=<text> for a subset)
 
 const assert = require('assert');
 const os = require('os');
@@ -597,12 +598,216 @@ test('the QR code follows the default route, not the interface name', async () =
   assert.ok(pickLanAddress([], 'en0') === null, 'no addresses at all is not a crash');
 });
 
+// Records every track the mock starts, in order, for tests that need to know
+// what the room actually heard rather than where the engine ended up.
+function playRecorder() {
+  const plays = [];
+  return {
+    plays,
+    log: (m) => {
+      const x = /\[mock\] play (\(autoplay\) )?(\S+)/.exec(String(m));
+      if (x) plays.push({ pid: x[2], at: Date.now(), autoplay: !!x[1] });
+    },
+  };
+}
+
+// 20 -----------------------------------------------------------------------
+test('two starts at once play one pick, and never drop the pick behind it', async () => {
+  // The booked handoff and a poll can both decide the moment has come. Each
+  // took the queue head AFTER awaiting the play, so the second played the
+  // same pick again and then shifted the NEXT pick off the queue unplayed.
+  // A host double-tapping skip did exactly the same.
+  const rig = await makeRig({ writeLatencyMs: 40 });
+  try {
+    rig.engine.hold = true;   // let the queue build without anything starting
+    for (let i = 0; i < 4; i++) await rig.engine.pick({ pid: rig.pids[i], deviceId: 'd' + i });
+    assert.equal(rig.engine.queue.length, 4);
+
+    await Promise.all([rig.engine.skip(), rig.engine.skip()]);
+
+    assert.equal(rig.music._sim.ops.filter((o) => o === 'playTrack').length, 1, 'one play, not two');
+    assert.equal(rig.engine.nowPlaying.pid, rig.pids[0]);
+    assert.deepEqual(rig.engine.queue.map((q) => q.pid), rig.pids.slice(1, 4),
+      'the pick behind the one that started was dropped without playing');
+  } finally { rig.stop(); }
+});
+
+// 21 -----------------------------------------------------------------------
+test('a read in flight across a handoff never cuts the new pick short', async () => {
+  // A read takes ~300ms and the handoff timer fires on its own schedule, so
+  // a read is often in flight at the handoff. It comes back describing the
+  // OLD track with ~0.3s left, and the engine used to act on it: "track
+  // ending, picks waiting, hand off" -- starting the pick AFTER the one that
+  // had just begun. The room heard the end of one song, half a second of the
+  // next, then a third. Test 17 never saw this because it queues one pick
+  // behind the current one, so the stale handoff found an empty queue.
+  const rec = playRecorder();
+  const N = 4;
+  const rig = await makeRig({ trackSeconds: 14, readLatencyMs: 400, writeLatencyMs: 250, log: rec.log });
+  try {
+    for (let i = 0; i < N; i++) await rig.engine.pick({ pid: rig.pids[i], deviceId: 'd' + i });
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[0], { label: 'first pick playing' });
+
+    for (let i = 1; i < N; i++) {
+      // Vary the phase against the poll rhythm, so the timer lands both
+      // inside and outside a read across the run.
+      // 3s left, not less: a 400ms read on an 800ms poll needs that long to
+      // see the jump at all, and real songs do not jump -- they approach.
+      await sleep(250 + i * 90);
+      rig.music._sim.leaveSecondsLeft(3);
+      await waitFor(() => rig.music._sim.player.pid === rig.pids[i], { label: `pick ${i} to take over`, timeout: 5000 });
+      await sleep(1200);   // long enough for a stale read to land and do its damage
+    }
+
+    assert.deepEqual(rec.plays.map((p) => p.pid), rig.pids.slice(0, N),
+      'every pick should play exactly once, in order, with nothing in between');
+    for (let i = 1; i < N - 1; i++) {
+      const heard = rec.plays[i + 1].at - rec.plays[i].at;
+      assert.ok(heard > 1200, `pick ${i} was cut off after ${heard}ms by the pick behind it`);
+    }
+  } finally { rig.stop(); }
+});
+
+// 22 -----------------------------------------------------------------------
+test('with crossfade on, the handoff learns to get in before Music does', async () => {
+  // Crossfade Songs makes Music start its own next track N seconds before
+  // the end. A handoff at 0.6s left never wins that race, so every pick came
+  // in by the recovery path and the room heard a second of whatever Music
+  // had chosen first. The engine now measures how early Music leaves a track
+  // and books the handoff that much sooner.
+  const rec = playRecorder();
+  const rig = await makeRig({ trackSeconds: 12, crossfadeSec: 3, readLatencyMs: 150, log: rec.log });
+  try {
+    // A pick plays out into Autoplay with nothing waiting. Music leaves it 3s
+    // early, and that is the measurement.
+    await rig.engine.pick({ pid: rig.pids[0], deviceId: 'd1' });
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[0], { label: 'pick playing' });
+    await sleep(300);
+    rig.music._sim.leaveSecondsLeft(4);
+    await waitFor(() => rig.music._sim.player.isAutoplay, { label: 'Autoplay to take over' });
+    await waitFor(() => rig.engine.musicLeadSec > 0, { label: 'the crossfade to be measured', timeout: 3000 });
+    assert.ok(Math.abs(rig.engine.musicLeadSec - 3) < 0.4,
+      `measured Music leaving ${rig.engine.musicLeadSec}s early, expected ~3s`);
+
+    // Somebody picks during that Autoplay song. It must ride the song out
+    // and still arrive BEFORE Music crossfades into another Autoplay song.
+    const autoplayPid = rig.music._sim.player.pid;
+    await rig.engine.pick({ pid: rig.pids[1], deviceId: 'd2' });
+    await sleep(300);
+    rig.music._sim.leaveSecondsLeft(5);
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[1], { label: 'the pick to take over', timeout: 5000 });
+
+    const how = rig.engine.lastStart;
+    assert.equal(how.reason, 'handoff', `expected the clean handoff, got "${how.reason}"`);
+    assert.ok(how.remaining > 3 && how.remaining <= 3.6 + 0.05,
+      `handed off at ${how.remaining}s left; Music crossfades at 3s`);
+    const i = rec.plays.findIndex((p) => p.pid === rig.pids[1]);
+    assert.equal(rec.plays[i - 1].pid, autoplayPid, 'another Autoplay song got in before the pick');
+  } finally { rig.stop(); }
+});
+
+// 23 -----------------------------------------------------------------------
+test('with crossfade on, Music still showing the old song after a handoff does not skip the pick', async () => {
+  // Not measured on a real Mac: Music may go on reporting the song it is
+  // crossfading OUT of for a while after the play. Past the 1s settle window
+  // the engine took that as "the pick is gone, a song is ending, hand off"
+  // and started the pick after next -- the reported skip again, by another
+  // road. Readings that still show the song we played over now get the
+  // length of the crossfade before anything is decided on them.
+  const rig = await makeRig({ trackSeconds: 14, crossfadeSec: 3, playSwitchLagMs: 2000, readLatencyMs: 150 });
+  try {
+    await rig.engine.pick({ pid: rig.pids[0], deviceId: 'd1' });
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[0], { label: 'pick playing' });
+    await sleep(300);
+    rig.music._sim.leaveSecondsLeft(4);
+    await waitFor(() => rig.engine.musicLeadSec > 0, { label: 'the crossfade to be measured', timeout: 4000 });
+
+    // Two picks during the Autoplay song: the first rides it out, the
+    // second must wait for the first.
+    await rig.engine.pick({ pid: rig.pids[1], deviceId: 'd2', pickedBy: 'Ana' });
+    await rig.engine.pick({ pid: rig.pids[2], deviceId: 'd3', pickedBy: 'Bo' });
+    await sleep(300);
+    rig.music._sim.leaveSecondsLeft(5);
+    await waitFor(() => rig.music._sim.player.pid === rig.pids[1], { label: 'the first pick to take over', timeout: 5000 });
+
+    // Out past the lag and the settle window, with room to spare.
+    await sleep(3500);
+    assert.equal(rig.music._sim.player.pid, rig.pids[1], 'the first pick was skipped');
+    assert.equal(rig.engine.nowPlaying && rig.engine.nowPlaying.pickedBy, 'Ana', 'the first pick lost its name');
+    assert.deepEqual(rig.engine.queue.map((q) => q.pid), [rig.pids[2]], 'the second pick should still be waiting');
+  } finally { rig.stop(); }
+});
+
+// 24 -----------------------------------------------------------------------
+test('the measured crossfade survives a restart, and junk on disk is ignored', async () => {
+  // Otherwise a restart mid-party relearns it on a guest's song.
+  const rig = await makeRig({}, {}, { queue: [], leadSamples: [6.1, 'x', 5.9, -3, 99, 6] });
+  try {
+    assert.equal(rig.engine.musicLeadSec, 6, 'median of the sane samples');
+    rig.engine._persist();
+    assert.deepEqual(rig.store.peek().leadSamples, [6.1, 5.9, 6], 'saved back as it was loaded');
+  } finally { rig.stop(); }
+
+  const quiet = await makeRig({}, {}, { queue: [], leadSamples: [0.2, 0, 0.3] });
+  try {
+    assert.equal(quiet.engine.musicLeadSec, 0, 'under half a second is noise, not crossfade');
+  } finally { quiet.stop(); }
+});
+
+// 25 -----------------------------------------------------------------------
+test('a stale reading that shows Music already on its own song still measures the crossfade', async () => {
+  // With a 1s crossfade Music moves 0.4s before the 0.6s handoff -- inside a
+  // single read, and reads stand aside while the play is being written. The
+  // one reading that can catch Music on its own song is then one that began
+  // before our play finished, which is thrown away as stale; so the
+  // crossfade was never measured while picks kept coming, and Music won by
+  // 0.4s on every song. Whether such a reading exists is down to timing, so
+  // this hands the engine exactly that reading rather than racing for it.
+  const rig = await makeRig();
+  try {
+    const e = rig.engine;
+    e.stop();   // no background ticks: this test is the only reader
+    const [A, B, X] = rig.pids;
+    const real = rig.music.readState;
+    const stale = (pid) => async () => Object.assign(await real('Jukebox'), {
+      readLatencyMs: 300, state: 'playing', position: 0.2,
+      track: { pid, title: 't', artist: 'a', album: 'b', duration: 200 },
+    });
+    const setScene = () => {
+      const t = Date.now();
+      e._leadSamples = []; e._applyLeadSamples();
+      e._lastObs = { pid: A, sampledAtMs: t - 900, endsAtMs: t + 500 };   // A due to end in 0.5s
+      e._lastCommandPid = B; e._lastCommandAt = t - 250; e._lastPlayAt = t - 5;   // B just sent
+      e._lastTrackPid = B;
+    };
+
+    // A reading that began before B was sent, showing X 0.2s in (0.5s with
+    // the read's own 0.3s): X started 0.5s ago, A was due in 0.5s -> 1.0s.
+    setScene();
+    rig.music.readState = stale(X);
+    await e._tickOnce();
+    assert.ok(Math.abs(e.musicLeadSec - 1.0) < 0.1, `measured ${e.musicLeadSec}s, expected ~1.0s`);
+    assert.equal(e._lastTrackPid, B, 'a stale reading must still decide nothing');
+
+    // Showing our own pick, or the old song, it proves nothing about Music.
+    for (const [pid, what] of [[B, 'the pick we sent'], [A, 'the song we were timing']]) {
+      setScene();
+      rig.music.readState = stale(pid);
+      await e._tickOnce();
+      assert.equal(e.musicLeadSec, 0, `measured a crossfade from a stale reading of ${what}`);
+    }
+  } finally { rig.stop(); }
+});
+
 // ---------------------------------------------------------------------------
 (async () => {
   let pass = 0, fail = 0;
   const t0 = Date.now();
   console.log('\nMOCK SUITE\n' + '='.repeat(72));
+  // ONLY=<text> runs the tests whose name contains it, e.g. ONLY=crossfade.
+  const only = process.env.ONLY;
   for (const t of tests) {
+    if (only && !t.name.includes(only)) continue;
     const started = Date.now();
     try {
       await t.fn();

@@ -139,6 +139,34 @@ source of truth.
   inaudible against a room, and it is the only way to guarantee Autoplay never
   gets a gap to slot a song into, whether or not Music notices tracks appended
   to a playlist it is already playing.
+- **Crossfade:** with Crossfade Songs on, Music starts its own next track N
+  seconds before the end, so a 0.6 s handoff never wins and every pick came in
+  by the recovery path (a second of Music's choice, then the pick). Music's
+  dictionary does not expose the setting and its preferences key is
+  undocumented, so `_measureMusicLead` measures it: on every track change
+  Music makes by itself, old track's due end minus new track's start. Median
+  of the last 3, under 0.5 s counts as 0, over 13 s is discarded as a skip,
+  persisted as `leadSamples`. The handoff is then booked at
+  `0.6 + musicLeadSec`. Off = unchanged behaviour.
+  A stale reading (no basis for decisions) that shows Music on a THIRD song
+  still counts as a measurement: with a ~1 s crossfade Music moves only 0.4 s
+  before the handoff, reads stand aside during the play write, and that
+  reading is the only one that can see it. Whether one lands there is timing
+  (~60-75% per song change), so a short crossfade can take a couple of songs
+  to learn while the queue never empties. Test 25 tests the branch directly
+  for that reason; a race test for it would be flaky by construction.
+- **One start at a time.** `_startNextPick` refuses while another is in
+  flight (`_starting`), and removes the entry it played by identity, never
+  `queue.shift()` after an await. Two overlapping starts used to play B twice
+  and shift C off the queue unplayed. Test 20.
+- **A reading older than our own play is discarded whole** (`_lastPlayAt`,
+  `_starting`), and a fresh one that does not show the pick yet makes **no
+  decisions** for `PICK_SETTLE_MS` (plus the crossfade length if it still
+  shows the song we played over). Previously such readings were only stopped
+  from clearing `nowPlaying`; the queue logic still acted on them, saw the
+  old track with 0.3 s left, and started the pick AFTER the one that had just
+  begun. That was the "first song ends, half a second of the next, then a
+  third" report. Test 21 (fails 3/3 without the fix), test 23.
 - **Duplicate persistent IDs:** always play the **last** match in the playlist.
   The earlier entry is one already played.
 - **Promotion:** if Music starts the queue head by itself, adopt it rather than
@@ -247,7 +275,8 @@ These are not negotiable. It is somebody's real music library.
 |---|---|---|
 | ~~The AppleScript/JXA layer was never executed~~ **CLEARED** | — | Preflight passed 17/17 against real Music on macOS 25.6 (darwin), Node 26.8, over a 13,375-track library. Every script in `scripts/` works. Re-run `node preflight.js` after any change to them. |
 | Bulk index on a very large library | Slow, or one bad track fails a whole column | Measured: **13,375 tracks indexed in 1.0s**, so this is not the problem it looked like. Each column is still fetched independently; a failure is recorded in `partial` rather than aborting. Only `pid` is mandatory. |
-| Crossfade left on | Two songs overlap at handoff | README checklist item 1 |
+| Crossfade left on | Each pick loses its last N seconds; the first change of a fresh install can still glitch before N is measured | Engine measures and hands off N s early (see Crossfade above). README item 1 still recommends off |
+| **Crossfade behaviour is modelled, not measured.** The mock assumes `current track` and `position` switch to the incoming song when the fade starts (`crossfadeSec`), and test 23 assumes Music may go on reporting the outgoing one (`playSwitchLagMs`). Whether a scripted `play` itself crossfades is also unknown. | Lead mismeasured; handoff cuts instead of fades | Log prints `Music is leaving tracks Ns early`; `test/party-rehearsal.js` now FAILS on `recovered`. Run it on the Mac with crossfade on |
 | Rectangle/Magnet own ⌃⌥←/→ | Skip hotkey does nothing | `preflight.js` checks; change `MODIFIER` in `public/app.js` |
 | Guest Wi-Fi client isolation | Phones load nothing | README checklist item 4 |
 | Index payload on a huge library | Slow first load on a phone | Rows are arrays not objects, gzipped once and served with an ETag, so each phone pays it once. Measured on a real library: **12,751 tracks = 1.32 MB raw, 0.49 MB gzipped.** Mock tracks have short synthetic names, so mock figures understate this by roughly 3x — do not size from them. |
@@ -258,8 +287,9 @@ These are not negotiable. It is somebody's real music library.
 ## How to run things
 
 ```bash
-node test/mock-suite.js                 # engine tests, no Mac, ~15s
+node test/mock-suite.js                 # engine tests, no Mac, ~60s
 VERBOSE=1 node test/mock-suite.js       # with engine logging
+ONLY=crossfade node test/mock-suite.js  # just the tests whose name matches
 
 MOCK=1 node server.js                   # simulator on :8484
 MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js   # with a QR
@@ -274,7 +304,10 @@ node preflight.js                       # against REAL Music, on the Mac
 
 Useful mock switches: `MOCK_LIBRARY` (track count), `MOCK_TRACK_SECONDS`,
 `MOCK_AUTOPLAY=0`, `MOCK_APPEND_PICKED_UP=1` (simulate Music noticing tracks
-appended to a playing playlist).
+appended to a playing playlist), `MOCK_CROSSFADE=6` (Music moves on 6 s
+early), `MOCK_READ_LATENCY` / `MOCK_WRITE_LATENCY` (ms; the read was measured
+at ~316 on a real Mac, the write never has been -- 200-250 is a guess. The
+stale-read bug only shows with both set).
 
 ## House style
 

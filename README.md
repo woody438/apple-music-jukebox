@@ -65,8 +65,14 @@ Work down this list. The first four are the ones that actually ruin parties.
 1. **Autoplay ON, crossfade OFF.**
    In Music, open **Playing Next** (top right) and make sure the **∞** button
    is lit. Autoplay is what keeps music going when nobody has picked anything.
-   Then **Music → Settings → Playback** and turn **Crossfade Songs OFF** —
-   crossfade overlaps the handoff and you get two songs at once.
+   Then **Music → Settings → Playback** and turn **Crossfade Songs OFF**.
+   Off is still the cleanest: every pick plays to within a second of its end.
+   If you leave it on, the jukebox copes. It measures how early Music moves
+   on (from the first song that changes by itself, usually an Autoplay one)
+   and hands over to the next pick that many seconds early, so Music never
+   gets to slip its own song in. The price is that each pick loses its last
+   few seconds, and until that first measurement the very first change of
+   the night can still show a moment of the wrong song.
 
 2. **Approve the automation prompt.**
    The first time the jukebox talks to Music, macOS asks whether Terminal may
@@ -371,6 +377,8 @@ up but nothing starts until you press play again.
 | The QR code shows an address phones can't reach | **This Mac has two network adapters** and the jukebox advertised the wrong one | See below — pin the right one in `jukebox.conf` |
 | Phones load but every pick fails | Same Wi-Fi, but client isolation is on | Move everyone to the main network, not the guest one |
 | Two songs overlap at the handoff | Crossfade is on | Music → Settings → Playback → Crossfade Songs **off** |
+| A second of a different song between two picks | Music moved on before the jukebox did | The log line for that pick will say `RECOVERED`. With crossfade on, look for `Music is leaving tracks Ns early` — once that line appears it should stop. If it keeps happening, send me the log |
+| A pick plays for half a second, then the next pick starts | Fixed (a stale read of Music started the pick after next) | Run `./Update.command`. If you still see it, send me the log |
 | Music stops dead when the queue runs out | Autoplay (∞) is off | Open Playing Next in Music and light up the **∞** |
 | A pick plays but then silence | The track was unchecked or cloud-unavailable | It should have been excluded. Re-index with ⌃⌥R and tell me |
 | ⌃⌥→ does nothing | Rectangle or Magnet has that shortcut | Quit it for the night, or change `MODIFIER` at the top of `public/app.js` |

@@ -123,6 +123,10 @@ function label(np) {
   const autoDur = drained.nowPlaying.duration || 0;
   const autoPos = drained.player.position || 0;
   const remaining = Math.max(0, autoDur - autoPos);
+  // With crossfade on, the engine hands off early on purpose, by however
+  // much it has measured Music leaving tracks early. Both the watch window
+  // and the "cut short" limit have to allow for that.
+  const lead = Number(drained.musicLeadSec) || 0;
   console.log(`\n      Autoplay song has ~${remaining.toFixed(0)}s left. Picking now.`);
 
   const late = await post('/api/pick', { pid: songs[4][0], deviceId: PHONE, pickedBy: 'Guest' });
@@ -133,7 +137,7 @@ function label(np) {
   }
 
   // Watch a slice of the middle of the song: it must keep playing.
-  const watch = Math.min(8000, Math.max(1500, (remaining - 3) * 1000));
+  const watch = Math.min(8000, Math.max(1500, (remaining - 3 - lead) * 1000));
   let interrupted = false;
   const until = Date.now() + watch;
   while (Date.now() < until) {
@@ -169,10 +173,16 @@ function label(np) {
   // interruption is cutting in with a big chunk of the song still to play.
   // "Did not interrupt" is already proven above, by holding through the
   // middle of the song; this catches a genuine regression.
-  check(lastRemaining !== null && lastRemaining < 10,
+  check(lastRemaining !== null && lastRemaining < 10 + lead,
         'it did not cut the Autoplay song short',
         lastRemaining === null ? 'n/a' : `switched with ${lastRemaining.toFixed(2)}s of nominal tail left`);
-  if (lastRemaining !== null && lastRemaining > 1.5) {
+  // "recovered" means Music moved on first and the room heard a moment of
+  // its choice before the pick took over. Until this was a FAIL, a rehearsal
+  // with crossfade on passed every check while every pick arrived that way.
+  const how = switched.lastStart ? switched.lastStart.reason : 'unknown';
+  check(how === 'handoff', 'the pick came in by the clean handoff, not the recovery path',
+        how + (lead ? `; crossfade measured at ${lead.toFixed(1)}s, so it handed off that much early` : ''));
+  if (lastRemaining !== null && lastRemaining > 1.5 + lead) {
     console.log(`      note: that track stopped ~${lastRemaining.toFixed(1)}s before its reported`);
     console.log('      duration, so the handoff did not fire on time and the missed-handoff');
     console.log('      rule took the room back instead. Run: node tools/check-timing.js');
