@@ -227,7 +227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var request = URLRequest(url: URL(string: "http://127.0.0.1:\(server.port)/api/host/network")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["interface": name ?? NSNull()])
+        let body: [String: Any] = ["interface": name.map { $0 as Any } ?? NSNull()]     // null means automatic
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 3
         URLSession.shared.dataTask(with: request) { _, response, _ in
             let ok = (response as? HTTPURLResponse)?.statusCode == 200

@@ -707,6 +707,8 @@ function makeBridge({ env }) {
           assert.ok(t.includeStandardAdditions, 'StandardAdditions switched on before use');
           assert.deepEqual(opts, { alteringLineEndings: false }, 'line endings left alone');
           rec.shell.push(cmd);
+          // Never really open anything: on a Mac that is a browser tab per run.
+          if (/^\/usr\/bin\/open /.test(cmd)) return '';
           // Like do shell script: /bin/sh, waits for stdout to close, throws on failure.
           const r = spawnSync('/bin/sh', ['-c', cmd], { env, encoding: 'utf8', timeout: 20000 });
           if (r.status !== 0) throw new Error(r.stderr || `exit ${r.status}`);
