@@ -71,15 +71,24 @@ start_menu_bar() {
   # Emptied here, then opened for APPEND: the helper appends to the same file,
   # and a plain > would have this process write over its lines.
   : > "$REPO/data/menubar.log"
-  # NOT nohup. Apple's nohup also detaches the process from the login (Aqua)
-  # session, and a process outside it cannot reach the WindowServer: the icon
-  # never appears, silently. (The server is fine under nohup -- it draws
-  # nothing.) Ignoring SIGHUP was the only part of nohup wanted here.
+  # NATIVE, never under Rosetta. On Apple Silicon, LaunchServices runs an app
+  # whose executable is a shell script -- this one -- as Intel code under
+  # Rosetta, and every universal binary it starts inherits that and runs
+  # translated too. osascript under Rosetta got as far as "starting" and then
+  # spun at 100% CPU, forever, with no icon (found on the first real Mac: a
+  # `sample` of it was full of x86_64 addresses and libRosetta). Run from
+  # Terminal it is native and fine. arch -arm64 asks for the native slice.
+  # hw.optional.arm64 is 1 on Apple Silicon even from inside Rosetta, and
+  # absent on an Intel Mac, where there is nothing to fix.
+  local native=""
+  [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && native="/usr/bin/arch -arm64"
+  echo "[launcher] starting the menu bar${native:+ natively ($native)}" >> "$REPO/data/menubar.log"
   # The subshell stays behind to record how the icon ended, so a crash or a
-  # kill shows up in the log as a status rather than as nothing at all.
+  # kill shows up in the log as a status rather than as nothing at all. It
+  # ignores SIGHUP, which is all nohup was doing here.
   (
     trap '' HUP
-    /usr/bin/osascript -l JavaScript "$MENU_JS" "$REPO" "$NODE" "$PORT" "${PUBLIC_URL:-}"
+    $native /usr/bin/osascript -l JavaScript "$MENU_JS" "$REPO" "$NODE" "$PORT" "${PUBLIC_URL:-}"
     echo "[launcher] menu bar exited, status $? ($(date +%H:%M:%S))"
   ) >>"$REPO/data/menubar.log" 2>&1 </dev/null &
 }
