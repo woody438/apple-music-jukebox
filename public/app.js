@@ -112,6 +112,7 @@ function boot() {
     if (c.isHost && !isPhone) {
       $('genreSettings').hidden = false;
       setupQr(c.guestUrl);
+      setupWifiQr(c.wifi);
       bindHotkeys();
       startIdleWatch();
     } else if (!isPhone) {
@@ -849,17 +850,41 @@ function saveGenreSelection() {
 // ---------------------------------------------------------------------------
 // QR
 // ---------------------------------------------------------------------------
+function qrSvg(text) {
+  // The library's default encoder keeps only the low byte of each character,
+  // which mangles a Wi-Fi name with an accent or an emoji in it. UTF-8 is
+  // what phone cameras assume, and for plain ASCII the bytes are identical.
+  if (qrcode.stringToBytesFuncs && qrcode.stringToBytesFuncs['UTF-8']) {
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  }
+  var qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+}
+
 function setupQr(url) {
   if (!url) { $('qrSection').hidden = true; return; }   // no address: no QR beats a wrong one
   if (typeof qrcode !== 'function') return;
   try {
-    var qr = qrcode(0, 'M');
-    qr.addData(url);
-    qr.make();
-    $('qrBox').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    $('qrBox').innerHTML = qrSvg(url);
     $('qrUrl').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
     $('qrSection').hidden = false;
   } catch (e) { /* no QR is survivable; the URL is still in the terminal */ }
+}
+
+// The password is printed under the code as well, for a phone whose camera
+// will not join from a QR code. The code carries it in plain text anyway, so
+// printing it gives away nothing the code does not.
+function setupWifiQr(w) {
+  if (!w || !w.qr || typeof qrcode !== 'function') return;
+  try {
+    $('wifiBox').innerHTML = qrSvg(w.qr);
+    $('wifiName').textContent = w.name;
+    if (w.password) $('wifiPass').textContent = w.password;
+    else $('wifiPassLine').textContent = 'Open network, no password';
+    $('wifiSection').hidden = false;
+  } catch (e) { /* no Wi-Fi code is survivable; people can still ask */ }
 }
 
 // ---------------------------------------------------------------------------
