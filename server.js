@@ -14,6 +14,7 @@ const { createStore } = require('./lib/state');
 const {
   lanCandidates, primaryInterfaceName, networkInterfaces,
   isInterfaceName, readNetworkChoice, writeNetworkChoice, resolveGuestUrl,
+  wifiQrText,
 } = require('./lib/net');
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,12 @@ const CONFIG = {
   // interfaces and the detected one is wrong. An adapter chosen from the menu
   // bar (data/network.json) outranks this -- see resolveGuestUrl in lib/net.js.
   publicUrl: process.env.PUBLIC_URL || null,
+
+  // A second QR code that joins phones to the Wi-Fi. Off unless the name is
+  // set. Set both in jukebox.conf, which git ignores: the repo is pushed to
+  // GitHub and the house Wi-Fi password does not belong in it.
+  wifiName: process.env.JUKEBOX_WIFI_NAME || '',
+  wifiPassword: process.env.JUKEBOX_WIFI_PASSWORD || '',
 };
 
 const MOCK = process.env.MOCK === '1';
@@ -152,6 +159,11 @@ function networkReport() {
     adapters: lanCandidates(networkInterfaces()),
   };
 }
+
+// Built once: the config cannot change without a restart.
+const WIFI = CONFIG.wifiName
+  ? { name: CONFIG.wifiName, password: CONFIG.wifiPassword, qr: wifiQrText(CONFIG.wifiName, CONFIG.wifiPassword) }
+  : null;
 
 // ---------------------------------------------------------------------------
 // HTTP plumbing
@@ -280,6 +292,9 @@ async function handle(req, res) {
       title: CONFIG.title,
       isHost: local,
       guestUrl: guestUrl(),
+      // Host only. Only the cabinet draws it, and a phone asking is already
+      // on the Wi-Fi -- no reason to hand the password to every one.
+      wifi: local ? WIFI : null,
       maxPerDevice: local ? CONFIG.maxPerHost : CONFIG.maxPerDevice,
       mock: MOCK,
     });
@@ -451,6 +466,12 @@ async function main() {
     log(`  Guests on their phones: ${g.url || '(no LAN address found -- choose one in the menu bar, or set PUBLIC_URL)'}`);
     if (g.source === 'chosen') log(`      (${g.iface}, chosen in the menu bar)`);
     if (g.chosenMissing) log('      (the adapter chosen in the menu bar has no address right now -- fell back)');
+    // The name only, never the password: this log is a file on disk. Printed
+    // so a missing or mangled name shows up here, not on a guest's phone; a
+    // mangled password is visible under the code on the cabinet.
+    log(WIFI
+      ? `  Wi-Fi QR code joins   : "${WIFI.name}" (${WIFI.password ? 'with password' : 'open network'})`
+      : '  Wi-Fi QR code         : off (set JUKEBOX_WIFI_NAME in jukebox.conf)');
     if (cands.length > 1) {
       log('');
       log(`  This Mac has ${cands.length} network addresses:`);

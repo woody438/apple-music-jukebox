@@ -3,6 +3,13 @@
 set -u
 cd "$(dirname "$0")" || exit 1
 
+# Per-machine settings, the same file the Dock app reads. Without this the
+# Wi-Fi QR code, PUBLIC_URL and the guest rules set there all worked from the
+# Dock and silently did nothing from here. set -a exports them to the server.
+if [ -f jukebox.conf ]; then
+  set -a; . ./jukebox.conf; set +a
+fi
+
 PORT="${PORT:-8484}"
 BOLD=$'\033[1m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 

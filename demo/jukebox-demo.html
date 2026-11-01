@@ -944,6 +944,17 @@ html, body { height: 100%; }
         <p class="queue-empty" id="queueEmpty">Nothing queued &mdash; Autoplay has the room.</p>
       </section>
 
+      <!-- Above the jukebox code because it comes first: a phone not on the
+           Wi-Fi cannot open the jukebox page. -->
+      <section class="qr" id="wifiSection" hidden>
+        <div class="qr-box" id="wifiBox"></div>
+        <div class="qr-text">
+          <strong>JOIN THE WI-FI</strong>
+          <code id="wifiName"></code>
+          <span class="qr-note" id="wifiPassLine">Password <code id="wifiPass"></code></span>
+        </div>
+      </section>
+
       <section class="qr" id="qrSection" hidden>
         <div class="qr-box" id="qrBox"></div>
         <div class="qr-text">
