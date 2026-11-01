@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var mock = args.contains("--mock")
     private lazy var server = ServerController(port: Self.portArgument(args) ?? Settings.port(), mock: mock)
     private let updater = Updater()
+    private lazy var settings = SettingsWindow(model: SettingsModel(server: server, updater: updater))
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
     private var signalSource: DispatchSourceSignal?
@@ -42,10 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
         paintIcon()
 
-        server.onChange = { [weak self] in self?.paintIcon() }
+        server.onChange = { [weak self] in self?.paintIcon(); self?.settings.refresh() }
         server.startWatching()
 
-        updater.onChange = { [weak self] in self?.paintIcon() }
+        updater.onChange = { [weak self] in self?.paintIcon(); self?.settings.refresh() }
         updater.onFound = { [weak self] release in self?.offer(release) }
         updater.stopJukebox = { [weak self] done in
             guard let self, self.server.ours || self.server.state == .running else { return done() }
@@ -53,7 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if !args.contains("--no-updates") { updater.start() }
 
-        if !args.contains("--no-autostart") { server.start(openPage: !mock) }
+        let startOnOpen = UserDefaults.standard.object(forKey: "startJukeboxOnOpen") as? Bool ?? true
+        if startOnOpen && !args.contains("--no-autostart") { server.start(openPage: !mock) }
 
         if !imported.isEmpty {
             NSLog("Party Jukebox: brought across from the git install: \(imported.joined(separator: ", "))")
@@ -178,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addUpdates(to: menu)
         menu.addItem(.separator())
 
-        menu.addItem(ActionItem("Edit Settings…") { [weak self] in self?.editSettings() })
+        menu.addItem(ActionItem("Settings…", key: ",") { [weak self] in self?.settings.show() })
         menu.addItem(ActionItem("Show Log") { Self.open(Paths.log, app: "Console") })
         menu.addItem(.separator())
         menu.addItem(ActionItem("Quit Party Jukebox", key: "q") { NSApp.terminate(nil) })
@@ -225,27 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if adapters.isEmpty { menu.addItem(TextItem("No network address found", indent: 1)) }
     }
 
-    /// Through the server when it is up -- it writes the same file and redraws
-    /// the QR code on the cabinet there and then -- else straight to disk.
-    private func choose(_ name: String?) {
-        guard server.state == .running else {
-            Network.writeChoice(name)
-            return
-        }
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(server.port)/api/host/network")!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["interface": name.map { $0 as Any } ?? NSNull()]     // null means automatic
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 3
-        URLSession.shared.dataTask(with: request) { _, response, _ in
-            let ok = (response as? HTTPURLResponse)?.statusCode == 200
-            DispatchQueue.main.async { [weak self] in
-                if !ok { Network.writeChoice(name) }      // an older server: the file alone
-                self?.server.probe()
-            }
-        }.resume()
-    }
+    private func choose(_ name: String?) { server.chooseNetwork(name) }
 
     private func addUpdates(to menu: NSMenu) {
         switch updater.phase {
@@ -296,19 +278,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Settings and the log
 
-    private func editSettings() {
-        let fm = FileManager.default
-        if !fm.fileExists(atPath: Paths.conf.path) {
-            try? fm.copyItem(at: Paths.confExample, to: Paths.conf)
-        }
-        Self.open(Paths.conf, app: "TextEdit")
-        if server.state == .running {
-            alert("Restart the jukebox to apply changes",
-                  "Settings are read when the jukebox starts. After saving, choose Restart Jukebox from the menu.",
-                  buttons: ["OK"])
-        }
-    }
-
     private static func open(_ file: URL, app: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -325,6 +294,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Party Jukebox",
                         action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(ActionItem("Settings…", key: ",") { [weak self] in self?.settings.show() })
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Party Jukebox", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())

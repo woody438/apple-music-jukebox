@@ -64,6 +64,17 @@ test ! -e "$APP/Contents/Resources/jukebox/public/artwork-cache" || fail "someth
 codesign --verify --strict "$APP" || fail "the bundle's signature broke while it ran"
 pass "data in Application Support; the bundle untouched and still validly signed"
 
+# The Settings window's helper, run as the app runs it: the bundled node and
+# the bundled conf.js, against a scratch file -- a save, then a read-back.
+SCRATCH="${RUNNER_TEMP:-/tmp}/smoke-jukebox.conf"
+rm -f "$SCRATCH"
+echo '{"JUKEBOX_TITLE":"Smoke","JUKEBOX_WIFI_NAME":"Test Net","JUKEBOX_WIFI_PASSWORD":"it'"'"'s $5 ok"}' \
+  | "$APP/Contents/MacOS/node" "$APP/Contents/Resources/jukebox/lib/conf.js" write "$SCRATCH" \
+      "$APP/Contents/Resources/jukebox/jukebox.conf.example" | grep -q '"ok":true' || fail "the settings helper could not save"
+"$APP/Contents/MacOS/node" "$APP/Contents/Resources/jukebox/lib/conf.js" read "$SCRATCH" \
+  | grep -q "\"JUKEBOX_WIFI_PASSWORD\":\"it's \$5 ok\"" || fail "the settings helper did not read the password back exactly"
+pass "the Settings window's helper saves and reads back, on the bundled node"
+
 kill -TERM "$APP_PID"
 for _ in $(seq 1 40); do
   alive "$APP_PID" || break

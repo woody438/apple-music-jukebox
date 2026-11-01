@@ -52,6 +52,9 @@ jobs:
       - name: Menu bar tests (the git install's), on the shipped Node
         run: node test/menubar-suite.js
 
+      - name: Settings file tests (what the Settings window reads and writes)
+        run: node test/conf-suite.js
+
       - name: Generate the Xcode project
         run: |
           brew install xcodegen

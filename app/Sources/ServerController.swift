@@ -225,6 +225,28 @@ final class ServerController {
         stop { [weak self] in self?.start(openPage: false) }
     }
 
+    /// Through the server when it is up -- it writes the same file and redraws
+    /// the QR code on the cabinet there and then -- else straight to disk.
+    func chooseNetwork(_ name: String?) {
+        guard state == .running else {
+            Network.writeChoice(name)
+            return
+        }
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/host/network")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["interface": name.map { $0 as Any } ?? NSNull()]     // null means automatic
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 3
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { [weak self] in
+                if !ok { Network.writeChoice(name) }      // an older server: the file alone
+                self?.probe()
+            }
+        }.resume()
+    }
+
     func openPage() {
         // localhost, never the LAN address: only localhost gets host rights.
         NSWorkspace.shared.open(pageURL)

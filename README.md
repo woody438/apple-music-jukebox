@@ -11,7 +11,48 @@ run time — the fonts and the QR library are in the repo.
 
 ---
 
-## GET IT ONTO THE PARTY LAPTOP
+## THE MAC APP (the easy way)
+
+**[Download Party Jukebox](https://github.com/woody438/apple-music-jukebox/releases/download/latest/PartyJukebox.zip)**
+— a Mac with an Apple chip, macOS 14 or later. No git, no Terminal, no Node
+to install: the app carries everything it needs.
+
+1. Unzip it and drag **Party Jukebox** into Applications.
+2. Open it. macOS blocks it the first time, because the app isn't notarised
+   by Apple: open **System Settings ▸ Privacy & Security**, scroll down, and
+   click **Open Anyway**. That is the only time.
+3. The jukebox starts and its page opens. A ♪ appears in the menu bar and
+   Party Jukebox in the Dock.
+4. At the first song, macOS asks whether **Party Jukebox may control Music**.
+   Allow it. That too is asked once: every update is signed with the same
+   certificate, so macOS knows it as the same app.
+
+Then work down [the party checklist](#the-party-checklist) — Autoplay on,
+crossfade off, firewall, same Wi-Fi. The app does not change any of that for you.
+
+**Everything is in the ♪ menu:** whether it's running, the address guests
+get, Open Jukebox Page, Start / Stop / Restart, Guest Network, updates, and
+**Settings…** (⌘,) — the marquee title, the guest rules, the Wi-Fi QR code,
+the guest network and more, as controls. A setting that the jukebox reads at
+start says so after you save, and offers **Restart Jukebox Now**: the queue is
+kept and Music carries on playing. Clicking the Dock icon opens the page.
+Quitting the app stops the jukebox, and Music carries on playing.
+
+**Updates come to you.** The app looks for a new build at launch and every
+four hours, and asks before installing — and if the jukebox is playing, it
+says so first. Install, and it quits, updates and reopens by itself in a few
+seconds. Nothing is ever installed without you saying so.
+
+Its settings, queue and log live in `~/Library/Application Support/Party
+Jukebox`. The first time it opens on a Mac that had the git install below,
+it brings that install's `jukebox.conf`, guest network choice and queue across.
+
+The rest of this README is the git install, which the app replaces, and the
+details behind both.
+
+---
+
+## GET IT ONTO THE PARTY LAPTOP (the git install)
 
 **Clone it. Don't download the ZIP.** Two things break in a ZIP: it loses the
 executable bit on `start.command`, and macOS quarantines anything downloaded

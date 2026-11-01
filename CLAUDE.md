@@ -312,6 +312,61 @@ uses), Check for Updates, Quit. The rules it was built on:
   waited on. If it fails the jukebox is exactly what it was.
   `JUKEBOX_MENU_BAR=0` in jukebox.conf turns it off.
 
+## The Mac app
+
+`app/` is a native Swift app (XcodeGen, `app/project.yml`) around the same
+`server.js`. It is what people download; the git install is being retired.
+
+```
+app/Sources/AppDelegate.swift   Dock icon + menu bar note, the menu, quit
+app/Sources/ServerController    starts/stops the bundled node, watches it
+app/Sources/Settings.swift      the Settings window (SwiftUI)
+app/Sources/ConfStore.swift     -> lib/conf.js, through the bundled node
+app/Sources/Updater.swift       ask-first updater, ported from busy-bar-sign
+app/Sources/MainLoop.swift      run-loop delivery that a quit cannot deadlock
+lib/conf.js                     jukebox.conf read/write for the window (tested)
+tools/app/                      fetch-node, assemble, sign, make-signing-cert
+app/Checks/smoke.sh             launches the built app on CI, end to end
+.github/workflows/build-app.yml builds, tests, signs, publishes
+```
+
+**Releasing is merging.** Every push to `main` that touches more than docs
+builds on GitHub's macos-15 runner, runs the engine, menu bar and settings
+suites on the Node that ships, smoke-tests the built app, signs it with the
+project certificate (repo secrets `SIGNING_CERT_P12` / `_PASSWORD`) and
+publishes it as the `latest` release. **Every installed copy is then offered
+it.** So nothing reaches `main` that has not been green on a pull request:
+a PR's build goes to the `preview` release, which only copies with Get
+Preview Builds on follow. The build number is the run number; the updater
+installs higher numbers only, and only builds signed with the same
+certificate as itself.
+
+Rules it was built on, each learned the hard way:
+
+- **Native, not a script.** A shell-script `CFBundleExecutable` is launched
+  under Rosetta on Apple Silicon (the git install's whole menu bar saga).
+  The app's executable is arm64 Mach-O, and the bundled Node is arm64.
+- **Node is pinned** (`app/node.version`: version + SHA-256), never "latest
+  LTS": a new runtime under the party changes when someone edits that file.
+- **The bundle is read-only.** Data, log, artwork cache: Application Support
+  (`JUKEBOX_DATA_DIR`, `JUKEBOX_ARTWORK_DIR`). Writing inside the app would
+  also break its signature; the smoke test checks it is still valid after use.
+- **jukebox.conf stays shell**, sourced by `/bin/sh` before node is exec'd.
+  The Settings window edits that file through `lib/conf.js`, which reads it
+  BY ASKING THE SHELL, rewrites only lines whose value changed (a value built
+  by `$(...)` must not be frozen by an unrelated save), single-quotes every
+  value, reads it back through the shell and restores the old file if
+  anything differs. `test/conf-suite.js`; four mutations, each caught.
+- **The app is the server's parent**, so TCC's "control Music" prompt names
+  Party Jukebox (`NSAppleEventsUsageDescription` must exist or macOS will not
+  even ask). One certificate for every build keeps that answer across updates.
+- **Never terminate from inside a main-queue block and wait on the main
+  queue.** SIGTERM did exactly that and hung forever: AppKit waits in a
+  nested run loop, and the main dispatch queue does not start a block while
+  one of its own is running. `MainLoop` delivers through the run loop.
+- **Ask first.** The updater never installs on its own: a restart mid-party
+  drops every phone's connection.
+
 ## Safety rules around the library
 
 These are not negotiable. It is somebody's real music library.
@@ -355,6 +410,7 @@ MOCK=1 node server.js                   # simulator on :8484
 MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js   # with a QR
 node test/ui-suite.js /tmp/shots        # browser tests (needs Playwright)
 node test/menubar-suite.js             # menu bar: helper, fake-bridge JXA, launcher, updater (~10s)
+node test/conf-suite.js                # the Settings window's jukebox.conf reader/writer
 node menubar/helper.js view            # what the menu bar sees, as JSON (on the Mac)
 node test/party-rehearsal.js           # end-to-end against a running server
 node test/party-rehearsal.js --fast    # same, skipping through the queued picks
