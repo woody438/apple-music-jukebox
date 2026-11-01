@@ -66,6 +66,10 @@ done
 
 open "http://localhost:${PORT}/"
 
+# The menu bar icon, via Jukebox.app so it starts the same way every time.
+# Best effort: the jukebox does not need it.
+open -g -n "$(pwd)/Jukebox.app" --args menu >/dev/null 2>&1 || true
+
 printf '\n%s  Jukebox is up.%s\n' "$BOLD" "$OFF"
 printf '    Full screen in the browser: %scontrol-command-F%s\n' "$BOLD" "$OFF"
 printf '    Host panel:                 %scontrol-option-H%s\n' "$BOLD" "$OFF"

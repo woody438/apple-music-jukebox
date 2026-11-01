@@ -627,6 +627,17 @@ function connectSse() {
   es.addEventListener('state', function (ev) {
     try { applySnapshot(JSON.parse(ev.data)); } catch (e) {}
   });
+  // The host chose another network adapter from the menu bar. Redraw the QR
+  // code where it stands: a cabinet showing a dead address is the one thing
+  // that silently stops every guest, and nobody thinks to reload it.
+  es.addEventListener('config', function (ev) {
+    try {
+      var c = JSON.parse(ev.data);
+      if (!('guestUrl' in c)) return;
+      cfg.guestUrl = c.guestUrl;
+      if (cfg.isHost && !isPhone) setupQr(c.guestUrl);
+    } catch (e) {}
+  });
   es.onerror = function () {
     // EventSource reconnects by itself, but if it gives up entirely we
     // rebuild it rather than leaving the room looking at a frozen screen.
@@ -839,7 +850,8 @@ function saveGenreSelection() {
 // QR
 // ---------------------------------------------------------------------------
 function setupQr(url) {
-  if (!url || typeof qrcode !== 'function') return;
+  if (!url) { $('qrSection').hidden = true; return; }   // no address: no QR beats a wrong one
+  if (typeof qrcode !== 'function') return;
   try {
     var qr = qrcode(0, 'M');
     qr.addData(url);

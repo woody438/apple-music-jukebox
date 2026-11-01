@@ -5,14 +5,16 @@
 
 const http = require('http');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
 const { URL } = require('url');
 
 const { Engine } = require('./lib/engine');
 const { createStore } = require('./lib/state');
-const { lanAddress, lanCandidates, primaryInterfaceName } = require('./lib/net');
+const {
+  lanCandidates, primaryInterfaceName, networkInterfaces,
+  isInterfaceName, readNetworkChoice, writeNetworkChoice, resolveGuestUrl,
+} = require('./lib/net');
 
 // ---------------------------------------------------------------------------
 // CONFIG -- the knobs worth turning on the night.
@@ -42,7 +44,8 @@ const CONFIG = {
   repeatWindowMin: envNum('JUKEBOX_REPEAT_MINUTES', 60),  // 0 disables it (host always exempt)
 
   // Phones get this URL on the QR code. Override if the laptop has several
-  // interfaces and the detected one is wrong.
+  // interfaces and the detected one is wrong. An adapter chosen from the menu
+  // bar (data/network.json) outranks this -- see resolveGuestUrl in lib/net.js.
   publicUrl: process.env.PUBLIC_URL || null,
 };
 
@@ -51,6 +54,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = process.env.JUKEBOX_DATA_DIR || path.join(ROOT, 'data');
 const ARTWORK_DIR = path.join(PUBLIC_DIR, 'artwork-cache');
+const NETWORK_FILE = path.join(DATA_DIR, 'network.json');   // the menu bar's adapter choice
 
 function log(...args) {
   const t = new Date().toTimeString().slice(0, 8);
@@ -115,10 +119,38 @@ function isLocalRequest(req) {
   return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
 }
 
+// Read fresh on every call, never cached: the menu bar can change the choice
+// while the server runs, and an adapter can lose its address mid-party. It is
+// one tiny file read plus the `route` call this always made; pages ask for it
+// once each, on load.
+function guestInfo() {
+  return resolveGuestUrl({
+    choice: readNetworkChoice(NETWORK_FILE),
+    publicUrl: CONFIG.publicUrl,
+    port: CONFIG.port,
+    candidates: lanCandidates(networkInterfaces()),
+    primary: primaryInterfaceName(),
+  });
+}
+
 function guestUrl() {
-  if (CONFIG.publicUrl) return CONFIG.publicUrl;
-  const ip = lanAddress();
-  return ip ? `http://${ip}:${CONFIG.port}/` : null;
+  return guestInfo().url;
+}
+
+// What the menu bar needs to draw its Guest Network section.
+function networkReport() {
+  const g = guestInfo();
+  return {
+    ok: true,
+    guestUrl: g.url,
+    source: g.source,              // chosen | conf | auto | none
+    iface: g.iface,
+    chosenMissing: g.chosenMissing,
+    choice: readNetworkChoice(NETWORK_FILE),
+    publicUrl: CONFIG.publicUrl,
+    port: CONFIG.port,
+    adapters: lanCandidates(networkInterfaces()),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +373,27 @@ async function handle(req, res) {
       case 'remove':     return sendJson(res, 200, engine.removeByEntryId(String(body.id || '')));
       case 'remove-last':return sendJson(res, 200, engine.removeLast());
       case 'clear':      return sendJson(res, 200, await engine.clearQueue());
+      case 'network': {
+        // GET reports, POST { interface: 'en1' | null } chooses. null means
+        // automatic. The laptop's QR code is redrawn live over SSE, so the
+        // host sees the change land without reloading the cabinet.
+        if (req.method === 'POST') {
+          const want = body.interface === undefined || body.interface === 'auto' ? null : body.interface;
+          if (want !== null && !isInterfaceName(want)) {
+            return sendJson(res, 400, { ok: false, reason: 'Not an interface name.' });
+          }
+          try {
+            writeNetworkChoice(NETWORK_FILE, want);
+          } catch (e) {
+            return sendJson(res, 500, { ok: false, reason: e.message });
+          }
+          const report = networkReport();
+          log(`guest network: ${want ? 'chose ' + want : 'automatic'} -> ${report.guestUrl || '(no address)'}`);
+          broadcast('config', { guestUrl: report.guestUrl });
+          return sendJson(res, 200, report);
+        }
+        return sendJson(res, 200, networkReport());
+      }
       case 'genres':
         return sendJson(res, 200, engine.setVisibleGenres(
           body.genres === null || body.genres === undefined ? null : body.genres));
@@ -390,22 +443,23 @@ async function main() {
   }
 
   server.listen(CONFIG.port, CONFIG.host, () => {
-    const guest = guestUrl();
-    const cands = lanCandidates(os.networkInterfaces());
+    const g = guestInfo();
+    const cands = lanCandidates(networkInterfaces());
     const primary = primaryInterfaceName();
     log('');
     log(`  Jukebox on the laptop : http://localhost:${CONFIG.port}/`);
-    log(`  Guests on their phones: ${guest || '(no LAN address found -- set PUBLIC_URL)'}`);
-    if (cands.length > 1 && !CONFIG.publicUrl) {
+    log(`  Guests on their phones: ${g.url || '(no LAN address found -- choose one in the menu bar, or set PUBLIC_URL)'}`);
+    if (g.source === 'chosen') log(`      (${g.iface}, chosen in the menu bar)`);
+    if (g.chosenMissing) log('      (the adapter chosen in the menu bar has no address right now -- fell back)');
+    if (cands.length > 1) {
       log('');
       log(`  This Mac has ${cands.length} network addresses:`);
       for (const c of cands) {
-        const mark = c.name === primary ? '  <- default route, chosen' : '';
+        const mark = c.name === g.iface ? '  <- guests get this one' : c.name === primary ? '  (default route)' : '';
         log(`      ${c.name.padEnd(8)} ${c.ip}${mark}`);
       }
-      log('  If guests cannot reach it, start with the other one:');
-      log(`      PUBLIC_URL="http://<address>:${CONFIG.port}/" ./start.command`);
-      log('      ...or put that line in jukebox.conf so the Dock app uses it too.');
+      log('  If guests cannot reach it, pick the other one under Guest Network in');
+      log('  the menu bar (the note icon at the top of the screen). It applies at once.');
     }
     log('');
     log(`  Guests: ${CONFIG.maxPerDevice} queued each. Laptop: ${CONFIG.maxPerHost}. ` +

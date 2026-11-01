@@ -8,6 +8,7 @@
     "start": "node server.js",
     "mock": "MOCK=1 node server.js",
     "test": "node test/mock-suite.js",
+    "test:menubar": "node test/menubar-suite.js",
     "preflight": "node preflight.js"
   },
   "dependencies": {},

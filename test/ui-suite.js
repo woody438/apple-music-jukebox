@@ -223,6 +223,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check((await page.locator('#qrBox svg').count()) === 1, 'QR code rendered as inline SVG');
   check((await page.textContent('#qrUrl')).includes('192.168.1.42'), 'guest URL displayed');
 
+  // Choosing another adapter from the menu bar redraws the QR code in place,
+  // no reload. Needs an adapter other than the current one; start the server
+  // with JUKEBOX_TEST_NETWORK (see the top of lib/net.js) to guarantee one.
+  {
+    const hostApi = (body) => page.evaluate((b) => fetch('/api/host/network', b === undefined ? {} : {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+    }).then((r) => r.json()), body);
+    const before = await hostApi();
+    const other = (before.adapters || []).find((a) => !(before.guestUrl || '').includes('//' + a.ip + ':'));
+    if (!other) {
+      console.log('SKIP  QR redraw on adapter change: the server has only one network address');
+    } else {
+      const svgBefore = await page.innerHTML('#qrBox');
+      await hostApi({ interface: other.name });
+      await page.waitForFunction((ip) => document.getElementById('qrUrl').textContent.includes(ip), other.ip, { timeout: 5000 })
+        .catch(() => {});
+      check((await page.textContent('#qrUrl')).includes(other.ip), 'choosing an adapter redraws the guest URL live', other.name);
+      check((await page.innerHTML('#qrBox')) !== svgBefore, 'and the QR code itself');
+      await hostApi({ interface: null });   // leave the server as we found it
+      await page.waitForFunction(() => document.getElementById('qrUrl').textContent.includes('192.168.1.42'), null, { timeout: 5000 })
+        .catch(() => {});
+      check((await page.textContent('#qrUrl')).includes('192.168.1.42'), 'and back to automatic');
+    }
+  }
+
   await page.keyboard.down('Control'); await page.keyboard.down('Alt');
   await page.keyboard.press('KeyH');
   await page.keyboard.up('Alt'); await page.keyboard.up('Control');
