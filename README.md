@@ -88,7 +88,9 @@ Work down this list. The first four are the ones that actually ruin parties.
 4. **Guests must be on the SAME Wi-Fi as the laptop.**
    Not the guest network. Many routers isolate guest clients from each other,
    which silently blocks every phone. If picks fail from phones but work on
-   the laptop, this is why.
+   the laptop, this is why. To save everyone asking for the password, put it
+   in `jukebox.conf` and the cabinet shows a join-the-Wi-Fi QR code too — see
+   [Wi-Fi QR code](#wi-fi-qr-code).
 
 5. **Plug the laptop into power.** `start.command` keeps the Mac and the
    display awake for as long as it runs, which flattens a battery fast.
@@ -406,11 +408,42 @@ Pin it, so the Dock app uses it too (an app launched from the Dock has no
 shell, so an environment variable set in Terminal never reaches it):
 
 ```bash
-cd ~/Developer/apple-music-jukebox && cp jukebox.conf.example jukebox.conf && open -e jukebox.conf
+cd ~/Developer/apple-music-jukebox && { [ -f jukebox.conf ] || cp jukebox.conf.example jukebox.conf; } && open -e jukebox.conf
 ```
 
 Uncomment the `PUBLIC_URL` line, put the right address in, save, and restart
 the jukebox. `jukebox.conf` is per-machine and is not tracked by git.
+
+## Wi-Fi QR code
+
+A second code on the laptop screen, above the jukebox one. A guest scans it,
+the phone offers to join the network, then they scan the jukebox code. The
+iPhone and Android cameras both do this with no app.
+
+```bash
+cd ~/Developer/apple-music-jukebox && { [ -f jukebox.conf ] || cp jukebox.conf.example jukebox.conf; } && open -e jukebox.conf
+```
+
+Uncomment the two `JUKEBOX_WIFI_` lines, fill them in, save, restart:
+
+```
+JUKEBOX_WIFI_NAME='Home Wi-Fi'
+JUKEBOX_WIFI_PASSWORD='the password'
+```
+
+- **Single quotes.** The file is read by the shell, so a `$` in a
+  double-quoted password is silently mangled. A `'` in the password is
+  written `'\''`.
+- **The startup log confirms it** with a `Wi-Fi QR code joins` line. It
+  never prints the password.
+- **The password is printed under the code** for anyone whose camera won't
+  join from a scan. The code holds it in plain text anyway.
+- **Only the laptop gets it.** Phones asking the server are told nothing.
+- **It must be the network the laptop is on** — checklist item 4.
+- **Scan it with your own phone before the party.** Forget the network first,
+  then scan, so you know it really joins.
+
+`jukebox.conf` is not tracked by git, so the password never reaches GitHub.
 
 ---
 
@@ -466,6 +499,8 @@ Environment variables, all optional:
 | `JUKEBOX_TITLE` | `JUKEBOX` | The neon marquee text |
 | `JUKEBOX_PLAYLIST` | `Jukebox` | The playlist the queue mirrors into |
 | `PUBLIC_URL` | auto | Override the QR URL if the detected address is wrong |
+| `JUKEBOX_WIFI_NAME` | — | Shows a join-the-Wi-Fi QR code. See [Wi-Fi QR code](#wi-fi-qr-code) |
+| `JUKEBOX_WIFI_PASSWORD` | — | Its password. Empty means an open network |
 | `MOCK` | — | `1` for the simulator |
 
 ---

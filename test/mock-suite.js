@@ -12,7 +12,7 @@ const { spawn } = require('child_process');
 
 const { Engine } = require('../lib/engine');
 const { createMockMusic } = require('../lib/mock-music');
-const { pickLanAddress, lanCandidates, isPrivateIPv4 } = require('../lib/net');
+const { pickLanAddress, lanCandidates, isPrivateIPv4, wifiQrText } = require('../lib/net');
 
 const VERBOSE = process.env.VERBOSE === '1';
 const qlog = VERBOSE ? (...a) => console.log('   ', ...a) : () => {};
@@ -797,6 +797,18 @@ test('a stale reading that shows Music already on its own song still measures th
       assert.equal(e.musicLeadSec, 0, `measured a crossfade from a stale reading of ${what}`);
     }
   } finally { rig.stop(); }
+});
+
+// 26 -----------------------------------------------------------------------
+test('the Wi-Fi QR text escapes the characters that would end a field early', async () => {
+  assert.equal(wifiQrText('Home', 'secret123'), 'WIFI:T:WPA;S:Home;P:secret123;;');
+  // An unescaped ; ends the password early and the phone joins with the
+  // wrong one. Apostrophes and spaces are ordinary characters, not escaped.
+  assert.equal(wifiQrText("Woody's Wi-Fi", 'a;b,c:d"e\\f'),
+    "WIFI:T:WPA;S:Woody's Wi-Fi;P:a\\;b\\,c\\:d\\\"e\\\\f;;");
+  assert.equal(wifiQrText('Café 🎶', 'x'), 'WIFI:T:WPA;S:Café 🎶;P:x;;', 'non-ASCII passes through');
+  assert.equal(wifiQrText('Open House', ''), 'WIFI:T:nopass;S:Open House;;', 'no password is an open network');
+  assert.equal(wifiQrText('', 'x'), null, 'no name, no code');
 });
 
 // ---------------------------------------------------------------------------

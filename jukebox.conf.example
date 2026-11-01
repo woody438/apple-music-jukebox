@@ -31,3 +31,17 @@
 # Minutes before the same song may be picked again. 0 turns the rule off.
 # The laptop is always exempt from it.
 # JUKEBOX_REPEAT_MINUTES=60
+
+# --- Wi-Fi QR code -----------------------------------------------------------
+# A second QR code on the laptop screen, above the jukebox one: scan it and
+# the phone joins the Wi-Fi. Leave the name unset and it does not appear.
+#
+# It MUST be the network the laptop is on. A separate guest network usually
+# stops phones reaching the laptop, and then the jukebox page will not load.
+#
+# Use SINGLE quotes. This file is read by the shell, so in double quotes a
+# $ or ` in the password is mangled. A ' in the password is written '\''.
+# The password is printed under the code too, for phones that will not join
+# from a scan -- the code holds it in plain text anyway.
+# JUKEBOX_WIFI_NAME='Home Wi-Fi'
+# JUKEBOX_WIFI_PASSWORD='the password'

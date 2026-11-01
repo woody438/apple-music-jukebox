@@ -254,6 +254,22 @@ anything the client sends. So the laptop gets the laptop's allowance only at
 That is correct -- it is what stops a phone claiming host rights -- but it
 surprises the host, so the startup log says it.
 
+Both launchers read `jukebox.conf`. `start.command` did not until the Wi-Fi
+QR code was added, so anything set there used to work only from the Dock.
+
+### Wi-Fi QR code
+
+`JUKEBOX_WIFI_NAME` / `JUKEBOX_WIFI_PASSWORD` put a join-the-Wi-Fi code above
+the jukebox one. Rules that keep it safe:
+
+- The password lives in `jukebox.conf` only. The repo is on GitHub.
+- `/api/config` sends it to the **host only**. The startup log prints the
+  name, never the password.
+- The `WIFI:` string is built server-side by `wifiQrText` in `lib/net.js`, so
+  the escaping of `\ ; , : "` is unit-tested (test 26) without a browser.
+- The client switches qrcode.js to its UTF-8 encoder. The default keeps only
+  the low byte of each character and mangles an accented or emoji name.
+
 ## Safety rules around the library
 
 These are not negotiable. It is somebody's real music library.

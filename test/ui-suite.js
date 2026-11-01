@@ -4,6 +4,9 @@
 //   MOCK=1 PUBLIC_URL="http://192.168.1.42:8484/" node server.js
 //   node test/ui-suite.js [screenshot-dir]
 //
+// Add JUKEBOX_WIFI_NAME='Test Wi-Fi' JUKEBOX_WIFI_PASSWORD='x' to the server
+// to check the Wi-Fi QR code; without them it checks the code stays hidden.
+//
 let chromium;
 try {
   ({ chromium } = require('playwright'));
@@ -222,6 +225,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(!(await page.locator('#qrSection').isHidden()), 'QR panel shown for the host');
   check((await page.locator('#qrBox svg').count()) === 1, 'QR code rendered as inline SVG');
   check((await page.textContent('#qrUrl')).includes('192.168.1.42'), 'guest URL displayed');
+
+  // The Wi-Fi code appears only when JUKEBOX_WIFI_NAME is set, so check the
+  // right thing for however the server under test was started.
+  const wifiCfg = await page.evaluate(() => fetch('/api/config').then(r => r.json()).then(c => c.wifi));
+  if (wifiCfg) {
+    check(!(await page.locator('#wifiSection').isHidden()), 'Wi-Fi QR panel shown when configured');
+    check((await page.locator('#wifiBox svg').count()) === 1, 'Wi-Fi QR rendered as inline SVG');
+    check((await page.textContent('#wifiName')).trim() === wifiCfg.name, 'Wi-Fi name displayed', wifiCfg.name);
+  } else {
+    check(await page.locator('#wifiSection').isHidden(), 'Wi-Fi QR panel hidden when not configured');
+  }
 
   await page.keyboard.down('Control'); await page.keyboard.down('Alt');
   await page.keyboard.press('KeyH');
