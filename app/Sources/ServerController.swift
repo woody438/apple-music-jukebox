@@ -141,7 +141,8 @@ final class ServerController {
         p.terminationHandler = { proc in
             let status = proc.terminationStatus
             let signalled = proc.terminationReason == .uncaughtSignal
-            DispatchQueue.main.async { [weak self] in self?.exited(status: status, signalled: signalled) }
+            // Through the run loop, not the main queue: this is what a quit waits for (MainLoop).
+            MainLoop.run { [weak self] in self?.exited(status: status, signalled: signalled) }
         }
         do {
             try p.run()
@@ -201,15 +202,16 @@ final class ServerController {
             NSLog("Party Jukebox: stopping the server (pid \(p.processIdentifier))")
             p.terminate()                                    // SIGTERM: server.js shuts down cleanly
             let pid = p.processIdentifier
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            MainLoop.after(5) { [weak self] in
                 guard let self, self.process?.processIdentifier == pid else { return }
+                NSLog("Party Jukebox: the server ignored SIGTERM; killing it")
                 kill(pid, SIGKILL)                           // it had its chance
             }
         } else if external, let pid = Self.listener(on: port) {
             // Not ours -- the git install's, or one started from Terminal.
             state = .stopping
             kill(pid, SIGTERM)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            MainLoop.after(2) { [weak self] in
                 self?.state = .stopped
                 self?.probe()
                 done?()

@@ -96,7 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         source.setEventHandler {
             NSLog("Party Jukebox: SIGTERM")
-            NSApp.terminate(nil)
+            // Not from inside this dispatch block: see MainLoop.
+            MainLoop.run { NSApp.terminate(nil) }
         }
         source.resume()
         signalSource = source
